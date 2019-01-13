@@ -749,6 +749,7 @@ static ssize_t set_gesture_motion(struct device *dev,
 
 static ssize_t trig_vibrate_ms(struct device *dev, struct device_attribute *attr, char *buf)
 {
+/*
 	struct nanohub_data *data = dev_get_drvdata(dev);
 
 	if (!data->pdata->vibrate_ms)
@@ -762,6 +763,7 @@ static ssize_t trig_vibrate_ms(struct device *dev, struct device_attribute *attr
 #ifdef CONFIG_VIB_TRIGGERS
 	vib_trigger_event(data->vib_trigger, data->pdata->vibrate_ms);
 #endif
+*/
 
 	return 0;
 }
