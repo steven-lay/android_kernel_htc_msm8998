@@ -2132,6 +2132,7 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 			if ((reg & PORT_PLS_MASK) != XDEV_U3){
 				pr_warn("port is not in u3 reg = %x port = %d\n", reg, i);
 				pm_request_resume(&dwc->xhci->dev);
+				mutex_unlock(&mdwc->suspend_resume_mutex);
 				return -EBUSY;
 			}
 		}
