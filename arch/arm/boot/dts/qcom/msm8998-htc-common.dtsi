@@ -67,17 +67,7 @@
 			reg = <0 0x83100000 0 0x00200000>;
 		};
 	};
-
-	htc_ramoops@0 {
-		compatible = "htc,ramoops";
-		linux,contiguous-region = <&ramoops_mem>;
-		record-size = <0x00010000>;  /*  128 KB */
-		console-size = <0x00100000>; /* 1024 KB */
-		pmsg-size = <0x00080000>;    /*  512 KB */
-		ftrace-size = <0x00040000>;  /*  256 KB */
-		dump-oops = <0x1>;
-	};
-};
+    };
 
 &soc {
     /* Modem_BSP */
@@ -113,6 +103,17 @@
 		reg = <0x290000 0x4>;
 		reg-names = "rpm_data_base";
 	};
+
+    ramoops {
+        compatible = "ramoops";
+        status = "ok";
+        memory-region = <&ramoops_mem>;
+
+        console-size = <0x0 0x00080000>;
+        pmsg-size    = <0x0 0x00040000>;
+        record-size  = <0x0 0x00008000>;
+        ftrace-size  = <0x0 0x00020000>;
+    };
 };
 
 &spmi_bus {
