@@ -24,6 +24,25 @@
 
 #define SENSOR_MAX_MOUNTANGLE (360)
 
+//HTC_START
+struct htc_device_info {
+	const char *name;
+	const char *size;
+	const char *other;
+	struct device_attribute attr;
+	struct kobject *kobj;
+};
+
+static struct htc_device_info htc_device_info_list[] = {
+	{"imx362_htc"		, "12M", NULL},
+	{"imx351_htc"		, "16M", "ultrapixel=2328x1744"},
+	{"imx351_cut11_htc"	, "16M", "ultrapixel=2328x1744"},
+	{"s5k4h9_htc"		, "8M", NULL},
+	{"ov16880_htc"		, "16M", NULL}, //OCL
+	{"ov16885_htc"		, "4M", "SuperResolution"}, //OCL
+};
+//HTC_END
+
 static struct v4l2_file_operations msm_sensor_v4l2_subdev_fops;
 static int32_t msm_sensor_driver_platform_probe(struct platform_device *pdev);
 
@@ -723,6 +742,60 @@ static void msm_sensor_fill_sensor_info(struct msm_sensor_ctrl_t *s_ctrl,
 	strlcpy(entity_name, s_ctrl->msm_sd.sd.entity.name, MAX_SENSOR_NAME);
 }
 
+//HTC_START
+static ssize_t sensor_vendor_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct htc_device_info *p = container_of(attr, struct htc_device_info, attr);
+	int size = sprintf(buf, "%s %s %s\n", p->name, p->size, p->other? : "");
+	if (size > 0) {
+		buf[size] = '\0';
+		return size + 1;
+	} else
+		return 0;
+}
+
+void msm_sensor_htc_sysfs_init(struct msm_camera_sensor_slave_info *sensor_slave_info, struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int ret, i;
+	struct htc_device_info *device = NULL;
+
+	// Find & set device info
+	for (i = 0; i < ARRAY_SIZE(htc_device_info_list); i++) {
+		if (strcmp(htc_device_info_list[i].name, sensor_slave_info->sensor_name) == 0) {
+			device = &htc_device_info_list[i];
+			device->attr.attr.name = "sensor";
+			device->attr.attr.mode = 0444;
+			device->attr.show = sensor_vendor_show;
+			device->attr.store = NULL;
+			break;
+		}
+	}
+	if (device == NULL) {
+		pr_err("[CAM]%s: %s, NO match sensor name\n", __func__, sensor_slave_info->sensor_name);
+		return;
+	}
+
+	pr_info("%s:kobject creat and add\n", sensor_slave_info->sensor_name);
+	if (sensor_slave_info->camera_id == 0)
+		device->kobj = kobject_create_and_add("android_camera", NULL);
+	else if (sensor_slave_info->camera_id == 1)
+		device->kobj = kobject_create_and_add("android_camera2", NULL);
+
+	if (device->kobj == NULL) {
+		pr_info("[CAM]%s: kobject creat and add failed\n", sensor_slave_info->sensor_name);
+		return;
+	}
+
+	pr_info("%s:sysfs_create_file\n", sensor_slave_info->sensor_name);
+	ret = sysfs_create_file(device->kobj, &device->attr.attr);
+	if (ret) {
+		pr_info("[CAM]%s: sysfs_create_file failed\n", sensor_slave_info->sensor_name);
+		kobject_del(device->kobj);
+	}
+	pr_info("%s:htc_sysfs_init done\n", sensor_slave_info->sensor_name);
+}
+//HTC_END
+
 /* static function definition */
 static int32_t msm_sensor_driver_is_special_support(
 	struct msm_sensor_ctrl_t *s_ctrl,
@@ -1046,6 +1119,10 @@ CSID_TG:
 	}
 
 	pr_err("%s probe succeeded", slave_info->sensor_name);
+
+//HTC_START
+	msm_sensor_htc_sysfs_init(slave_info, s_ctrl);
+//HTC_END
 
 	s_ctrl->bypass_video_node_creation =
 		slave_info->bypass_video_node_creation;

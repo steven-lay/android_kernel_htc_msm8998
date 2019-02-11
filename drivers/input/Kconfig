@@ -200,6 +200,14 @@ config INPUT_KEYCOMBO
 	---help---
 	  Say Y here if you want to take action when some keys are pressed;
 
+config INPUT_KEYLED
+    tristate "Virtual key led blink"
+    depends on INPUT
+    select INPUT_KEYCOMBO
+    ---help---
+      Say Y here if you want to blink virtual key led after reset
+      combination keys are pressed for 3 seconds;
+
 comment "Input Device Drivers"
 
 source "drivers/input/keyboard/Kconfig"
@@ -221,6 +229,8 @@ menu "Hardware I/O ports"
 source "drivers/input/serio/Kconfig"
 
 source "drivers/input/gameport/Kconfig"
+
+source "drivers/input/edge_xr15510/Kconfig"
 
 endmenu
 

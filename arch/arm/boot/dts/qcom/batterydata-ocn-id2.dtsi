@@ -1,0 +1,78 @@
+qcom,ocean-id2-batterydata {
+	qcom, = <24>;
+	/* #2711290_HTC_OceanBYD_3000mAh_averaged_MasterSlave_Jan19th2017*/
+	qcom,max-voltage-uv = <4400000>;
+	qcom,nom-batt-capacity-mah = <3000>;
+	qcom,batt-id-kohm = <47>;
+	qcom,battery-beta = <4360>;
+	qcom,battery-type = "ocean_id2";
+	qcom,checksum = <0xB82B>;
+	qcom,gui-version = "PMI8998GUI - 2.0.0.54";
+
+	qcom,fastchg-current-ma = <3000>;
+	qcom,fg-cc-cv-threshold-mv = <4400>;
+	qcom,fcc-mah = <3000>;
+
+	htc,batt_id = <2>;
+	htc,id_raw_min = <33001>;
+	htc,id_raw_max = <63000>;
+
+	qcom,fg-profile-data = [
+		 68 1F B5 05
+		 7F 0A 36 06
+		 94 1D C7 06
+		 DE 12 AE 1D
+		 D2 18 43 22
+		 0D 3D 97 4A
+		 52 00 00 00
+		 16 00 00 00
+		 00 00 1C C5
+		 12 CD 37 CB
+		 20 00 08 00
+		 25 00 E4 ED
+		 C7 06 D2 F2
+		 BF E5 1C 12
+		 72 ED E1 33
+		 1B 06 09 20
+		 27 00 14 00
+		 E9 1F 5C 05
+		 B1 0A 11 06
+		 79 1D 34 E4
+		 23 12 EA 1D
+		 DD 18 1D 23
+		 42 45 4E 53
+		 52 00 00 00
+		 0D 00 00 00
+		 00 00 B4 D5
+		 31 CA 13 C2
+		 1A 00 00 00
+		 11 EB E4 ED
+		 CA F4 6C 00
+		 2D E5 52 03
+		 9F 00 4C 1B
+		 B6 33 CC FF
+		 07 10 00 00
+		 19 0C 66 46
+		 1A 00 40 00
+		 74 01 0A FA
+		 FF 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+	];
+};

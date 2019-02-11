@@ -19,17 +19,10 @@ obj-$(CONFIG_SND_SOC_MSM8996) += snd-soc-msm8996.o
 # for MSM8998 sound card driver
 snd-soc-msm8998-objs := msm8998.o
 obj-$(CONFIG_SND_SOC_MSM8998) += snd-soc-msm8998.o
+obj-$(CONFIG_SND_SOC_MSM8998) += htc_acoustic_alsa.o
 
-# for SDM660 sound card driver
-snd-soc-sdm660-common-objs := sdm660-common.o
-obj-$(CONFIG_SND_SOC_SDM660_COMMON) += snd-soc-sdm660-common.o
 
-# for SDM660 sound card driver
-snd-soc-int-codec-objs := sdm660-internal.o
-obj-$(CONFIG_SND_SOC_INT_CODEC) += snd-soc-sdm660-common.o
 obj-$(CONFIG_SND_SOC_INT_CODEC) += snd-soc-int-codec.o
 
-# for SDM660 sound card driver
-snd-soc-ext-codec-objs := sdm660-external.o sdm660-ext-dai-links.o
-obj-$(CONFIG_SND_SOC_EXT_CODEC) += snd-soc-sdm660-common.o
 obj-$(CONFIG_SND_SOC_EXT_CODEC) += snd-soc-ext-codec.o
+obj-$(CONFIG_SND_SOC_EXT_CODEC) += htc_acoustic_alsa.o

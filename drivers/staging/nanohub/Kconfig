@@ -1,0 +1,107 @@
+config NANOHUB
+	tristate "Nanohub"
+	default N
+	help
+	  Enable support for the nanohub sensorhub driver.
+
+	  This driver supports the android nanohub sensorhub.
+
+	  If in doubt, say N here.
+
+if NANOHUB
+
+config NANOHUB_SPI
+	bool "Nanohub SPI"
+	default Y
+	help
+	  Enable nanohub SPI support.
+
+	  Either this or NANOHUB_I2C should be selected.
+
+	  If in doubt, say Y here.
+
+config NANOHUB_I2C
+	bool "Nanohub I2C"
+	default N
+	help
+	  Enable nanohub I2C support.
+
+	  Either this or NANOHUB_SPI should be selected.
+
+	  If in doubt, say N here.
+
+config NANOHUB_STM32L4
+	bool "Nanohub STM32L4 series"
+	default N
+	help
+	  Use STM32L4 series as nanohub
+
+config NANOHUB_CONTEXTHUB_HAL
+	bool "Nanohub ContextHub HAL"
+	default N
+	help
+	  Enable contextHub HAL support.
+
+config NANOHUB_TP_SWITCH
+	bool "TP switch pin status synchronization"
+	default n
+	help
+	  TP switch pin status synchronization
+
+config NANOHUB_SECOND_DISP
+	bool "Second Disp"
+	default n
+	depends on NANOHUB_TP_SWITCH
+	help
+	  Second Disp
+
+config NANOHUB_AOD
+	bool "Always on display"
+	default n
+	depends on NANOHUB_TP_SWITCH
+	help
+	  Always on display mode
+
+config NANOHUB_EDGE
+	bool "Edge sensor"
+	default n
+	help
+	  Edge sensor
+
+config NANOHUB_HTC_SENSTYPE_OFFSET
+	bool "HTC sensor type offset"
+	default n
+	help
+	  HTC sensor type offset
+
+config NANOHUB_HTC_LOG
+	bool "Trigger dump htc log"
+	default n
+	help
+	  Trigger dump htc log
+
+config NANOHUB_FLASH_GPIO_CONTROL
+	bool "Flash gpio control"
+	default n
+	help
+	  Flash gpio control
+
+config NANOHUB_FLASH_STATUS_CHECK
+	bool "Flash status check"
+	default n
+	help
+	  Flash status check
+
+config NANOHUB_FLASH_RETRY
+	bool "Flash firmware retry"
+	default n
+	help
+	  Flash firmware retry
+
+config NANOHUB_KTHREAD_RUN_PROBE_END
+	bool "Kthread_run at probe end"
+	default n
+	help
+	  Kthread_run at probe end
+
+endif # NANOHUB

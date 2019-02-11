@@ -1049,6 +1049,8 @@ struct dwc3 {
 	unsigned long		l1_remote_wakeup_cnt;
 
 	wait_queue_head_t	wait_linkstate;
+	bool                    usb_disable;
+	void                    (*notify_usb_disabled)(void);
 	bool			create_reg_debugfs;
 };
 

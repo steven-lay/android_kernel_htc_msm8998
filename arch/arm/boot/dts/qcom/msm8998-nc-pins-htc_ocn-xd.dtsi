@@ -1,0 +1,117 @@
+/* Copyright (c) 2016, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc {
+	htc,htc_nc_pins {
+		compatible = "htc,nc_pin";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&nc_pins_input_pd &nc_pins_output_low>;
+	};
+};
+
+&tlmm {
+	nc_pins_input_pd {
+		nc_pins_input_pd: nc_pins_input_pd {
+			mux {
+				pins = "gpio0", "gpio1","gpio2","gpio3", "gpio90";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio0", "gpio1","gpio2","gpio3", "gpio90";
+				drive-strength = <2>;		/* 2 mA */
+				bias-pull-down;     /* PULL DOWN */
+			};
+		};
+	};
+
+	nc_pins_output_low {
+		nc_pins_output_low: nc_pins_output_low {
+			mux {
+				pins = "gpio22";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio22";
+				drive-strength = <2>;		/* 2 mA */
+				output-low;			/* OUTPUT LOW */
+			};
+		};
+	};
+};
+
+&soc {
+	tlmm: pinctrl@03400000 {
+		/* gpio0 ~ gpio3 */
+		i2c_1 {
+			i2c_1_active: i2c_1_active {
+				mux {
+					/delete-property/ pins;
+				};
+
+				config {
+					/delete-property/ pins;
+				};
+			};
+			i2c_1_sleep: i2c_1_sleep {
+				mux {
+					/delete-property/ pins;
+				};
+
+				config {
+					/delete-property/ pins;
+				};
+			};
+		};
+		spi_1 {
+			spi_1_sleep: spi_1_sleep {
+				mux {
+					/delete-property/ pins;
+				};
+
+				config {
+					/delete-property/ pins;
+				};
+			};
+			spi_1_active: spi_1_active {
+				mux {
+					/delete-property/ pins;
+				};
+
+				config {
+					/delete-property/ pins;
+				};
+			};
+		};
+		blsp1_uart1_active: blsp1_uart1_active {
+			mux {
+					/delete-property/ pins;
+				};
+
+				config {
+					/delete-property/ pins;
+				};
+		};
+		blsp1_uart1_sleep: blsp1_uart1_sleep {
+			mux {
+					/delete-property/ pins;
+				};
+
+				config {
+					/delete-property/ pins;
+				};
+		};
+	};
+};
+

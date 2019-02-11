@@ -34,7 +34,7 @@
 
 	chosen {
 		stdout-path = "serial0";
-		bootargs = "rcupdate.rcu_expedited=1";
+		bootargs = "rcupdate.rcu_expedited=1 androidboot.rpmdevice=290000.qcom,rpm-stats-ver";
 	};
 
 	cpus {
@@ -282,6 +282,7 @@
 		compatible = "simple-bus";
 	};
 
+/* HTC: enable this fstab in correspond project's dtsi
 	firmware: firmware {
 		android {
 			compatible = "android,firmware";
@@ -298,6 +299,7 @@
 			};
 		};
 	};
+*/
 
 	reserved-memory {
 		#address-cells = <2>;
@@ -2140,6 +2142,9 @@
 		qcom,gpio-err-ready = <&smp2pgpio_ssr_smp2p_1_in 1 0>;
 		qcom,gpio-proxy-unvote = <&smp2pgpio_ssr_smp2p_1_in 2 0>;
 		qcom,gpio-stop-ack = <&smp2pgpio_ssr_smp2p_1_in 3 0>;
+		//Modem_BSP++
+		qcom,gpio-reboot-req = <&smp2pgpio_ssr_smp2p_1_in 4 0>;
+		//Modem_BSP--
 		qcom,gpio-shutdown-ack = <&smp2pgpio_ssr_smp2p_1_in 7 0>;
 
 		/* GPIO output to mss */
@@ -2355,7 +2360,6 @@
 			 <&clock_gcc clk_gcc_ce1_ahb_m_clk>,
 			 <&clock_gcc clk_gcc_ce1_axi_m_clk>;
 		qcom,ce-opp-freq = <171430000>;
-		qcom,qsee-reentrancy-support = <2>;
 	};
 
 	qcom_tzlog: tz-log@146BF720 {
@@ -2535,7 +2539,9 @@
 	};
 
 	pcie0: qcom,pcie@01c00000 {
-		compatible = "qcom,pci-msm";
+		/* HTC_WIFI_START */
+		compatible = "qcom,pci-msmXXX";
+		/* HTC_WIFI_END */
 		cell-index = <0>;
 
 		reg = <0x1c00000 0x2000>,
@@ -2773,7 +2779,7 @@
 			qcom,mitigation-freq-khz = <576000>;
 			qcom,vph-high-threshold-uv = <3500000>;
 			qcom,vph-low-threshold-uv = <3300000>;
-			qcom,soc-low-threshold = <10>;
+			qcom,soc-low-threshold = <0>;
 			qcom,thermal-handle = <&msm_thermal_freq>;
 		};
 	};
@@ -2846,11 +2852,13 @@
 
 	wdog: qcom,wdt@17817000 {
 		compatible = "qcom,msm-watchdog";
-		reg = <0x17817000 0x1000>;
-		reg-names = "wdt-base";
+		reg = <0x17817000 0x1000>,
+		      <0x010a3000 0x1000>;
+		reg-names = "wdt-base",
+			    "mpm-clock-base";
 		interrupts = <0 3 0>, <0 4 0>;
-		qcom,bark-time = <11000>;
-		qcom,pet-time = <10000>;
+		qcom,bark-time = <18000>;
+		qcom,pet-time = <8000>;
 		qcom,ipi-ping;
 		qcom,wakeup-enable;
 		qcom,scandump-size = <0x40000>;
@@ -2886,7 +2894,8 @@
 
 	qcom,msm-rtb {
 		compatible = "qcom,msm-rtb";
-		qcom,rtb-size = <0x100000>;
+		reg = <0x83400000 0x100000>;
+		reg-names = "msm_rtb_res";
 	};
 
 	qcom,mpm2-sleep-counter@10a3000 {
@@ -2916,6 +2925,12 @@
 			compatible = "qcom,msm-imem-restart_reason";
 			reg = <0x65c 4>;
 		};
+
+                restart_info@a94 {
+                        compatible = "htc,msm-imem-restart_info";
+                        reg = <0xa94 100>;
+                        info_size = <100>;
+                };
 
 		boot_stats@6b0 {
 			compatible = "qcom,msm-imem-boot_stats";
@@ -3249,6 +3264,21 @@
 			interrupts = <0 349 4>;
 			label = "spss";
 		};
+	};
+
+	mcd {
+		compatible = "qcom,mcd";
+		qcom,ce-hw-instance = <0>;
+		qcom,ce-device = <0>;
+		interrupts = <0 248 0>;
+		interrupt-names = "mcd_irq";
+		clock-names = "core_clk_src", "core_clk",
+			"iface_clk", "bus_clk";
+		clocks = <&clock_gcc clk_ce1_clk>,
+			<&clock_gcc clk_qseecom_ce1_clk>,
+			<&clock_gcc clk_gcc_ce1_ahb_m_clk>,
+			<&clock_gcc clk_gcc_ce1_axi_m_clk>;
+			qcom,ce-opp-freq = <171430000>;
 	};
 };
 

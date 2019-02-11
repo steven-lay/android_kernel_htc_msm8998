@@ -94,6 +94,7 @@ struct eth_dev {
 	bool			zlp;
 	u8			host_mac[ETH_ALEN];
 	u8			dev_mac[ETH_ALEN];
+	int			miMaxMtu;
 };
 
 /*-------------------------------------------------------------------------*/
@@ -148,6 +149,7 @@ static inline int qlen(struct usb_gadget *gadget, unsigned qmult)
 	xprintk(dev , KERN_INFO , fmt , ## args)
 
 /*-------------------------------------------------------------------------*/
+static struct eth_dev *the_dev = NULL;
 
 /* NETWORK DRIVER HOOKUP (to the layer above this driver) */
 
@@ -156,12 +158,19 @@ static int ueth_change_mtu(struct net_device *net, int new_mtu)
 	struct eth_dev	*dev = netdev_priv(net);
 	unsigned long	flags;
 	int		status = 0;
+	int		iMaxMtuSet = ETH_FRAME_LEN;
 
+	if (the_dev) {
+		if (the_dev->miMaxMtu == ETH_FRAME_LEN_MAX - ETH_HLEN)
+			iMaxMtuSet = ETH_FRAME_LEN_MAX - ETH_HLEN;
+	}
 	/* don't change MTU on "live" link (peer won't know) */
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->port_usb)
 		status = -EBUSY;
 	else if (new_mtu <= ETH_HLEN || new_mtu > GETHER_MAX_ETH_FRAME_LEN)
+		status = -ERANGE;
+	else if (new_mtu <= ETH_HLEN || new_mtu > iMaxMtuSet)
 		status = -ERANGE;
 	else
 		net->mtu = new_mtu;
@@ -324,7 +333,8 @@ static void rx_complete(struct usb_ep *ep, struct usb_request *req)
 		DBG(dev, "rx %s reset\n", ep->name);
 		defer_kevent(dev, WORK_RX_MEMORY);
 quiesce:
-		dev_kfree_skb_any(skb);
+		if (skb)
+			dev_kfree_skb_any(skb);
 		goto clean;
 
 	/* data overrun */
@@ -443,14 +453,19 @@ static void process_rx_w(struct work_struct *work)
 	struct eth_dev	*dev = container_of(work, struct eth_dev, rx_work);
 	struct sk_buff	*skb;
 	int		status = 0;
+	unsigned int	uiCurMtu = 0;
 
 	if (!dev->port_usb)
 		return;
 
+	uiCurMtu = dev->net->mtu + ETH_HLEN;
+	if ((uiCurMtu <= ETH_HLEN) || (uiCurMtu > ETH_FRAME_LEN_MAX))
+		uiCurMtu = ETH_FRAME_LEN;
+
 	while ((skb = skb_dequeue(&dev->rx_frames))) {
 		if (status < 0
 				|| ETH_HLEN > skb->len
-				|| skb->len > ETH_FRAME_LEN) {
+				|| skb->len > uiCurMtu) {
 			dev->net->stats.rx_errors++;
 			dev->net->stats.rx_length_errors++;
 			DBG(dev, "rx length %d\n", skb->len);
@@ -602,12 +617,18 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 					struct net_device *net)
 {
 	struct eth_dev		*dev = netdev_priv(net);
-	int			length = 0;
+	int			length = skb->len;
 	int			retval;
 	struct usb_request	*req = NULL;
 	unsigned long		flags;
 	struct usb_ep		*in;
 	u16			cdc_filter;
+
+	if ((!skb) || (IS_ERR(skb)))
+		return NETDEV_TX_OK;
+
+	if ((!net) || (IS_ERR(net)))
+		return NETDEV_TX_OK;
 
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->port_usb) {
@@ -619,7 +640,7 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 	}
 	spin_unlock_irqrestore(&dev->lock, flags);
 
-	if (skb && !in) {
+	if (!in) {
 		dev_kfree_skb_any(skb);
 		return NETDEV_TX_OK;
 	}
@@ -629,7 +650,7 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 		alloc_tx_buffer(dev);
 
 	/* apply outgoing CDC or RNDIS filters */
-	if (skb && !is_promisc(cdc_filter)) {
+	if (!is_promisc(cdc_filter)) {
 		u8		*dest = skb->data;
 
 		if (is_multicast_ether_addr(dest)) {
@@ -680,14 +701,8 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 		if (dev->port_usb)
 			skb = dev->wrap(dev->port_usb, skb);
 		spin_unlock_irqrestore(&dev->lock, flags);
-		if (!skb) {
-			/* Multi frame CDC protocols may store the frame for
-			 * later which is not a dropped frame.
-			 */
-			if (dev->port_usb->supports_multi_frame)
-				goto multiframe;
+		if (!skb)
 			goto drop;
-		}
 	}
 
 	spin_lock_irqsave(&dev->req_lock, flags);
@@ -765,7 +780,6 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 			dev_kfree_skb_any(skb);
 drop:
 		dev->net->stats.tx_dropped++;
-multiframe:
 		spin_lock_irqsave(&dev->req_lock, flags);
 		if (list_empty(&dev->tx_reqs))
 			netif_start_queue(net);
@@ -1016,6 +1030,8 @@ struct net_device *gether_setup_name_default(const char *netname)
 	net->ethtool_ops = &ops;
 	SET_NETDEV_DEVTYPE(net, &gadget_type);
 
+	the_dev = dev;
+
 	return net;
 }
 EXPORT_SYMBOL_GPL(gether_setup_name_default);
@@ -1132,7 +1148,7 @@ int gether_get_host_addr_cdc(struct net_device *net, char *host_addr, int len)
 		return -EINVAL;
 
 	dev = netdev_priv(net);
-	snprintf(host_addr, len, "%pM", dev->host_mac);
+	snprintf(host_addr, len, "%pm", dev->host_mac);
 
 	return strlen(host_addr);
 }
@@ -1197,8 +1213,15 @@ void gether_cleanup(struct eth_dev *dev)
 	unregister_netdev(dev->net);
 	flush_work(&dev->work);
 	free_netdev(dev->net);
+	the_dev = NULL;
 }
 EXPORT_SYMBOL_GPL(gether_cleanup);
+
+int gether_change_mtu(int new_mtu)
+{
+	struct eth_dev *dev = the_dev;
+	return ueth_change_mtu(dev->net, new_mtu);
+}
 
 /**
  * gether_connect - notify network layer that USB link is active

@@ -32,6 +32,8 @@
 #include <linux/of.h>
 #include <linux/pm.h>
 #include <linux/jiffies.h>
+#include <linux/statfs.h>
+#include <linux/debugfs.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/mmc.h>
@@ -65,6 +67,10 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(mmc_blk_rw_end);
  * operations the card has to perform.
  */
 #define MMC_BKOPS_MAX_TIMEOUT	(4 * 60 * 1000) /* max time to wait in ms */
+#define MMC_DETECT_RETRIES	5
+
+/* Print workload log duration */
+#define MMC_WORKLOAD_DURATION (60 * 60 * 1000) /* 1 hour */
 
 static struct workqueue_struct *workqueue;
 static const unsigned freqs[] = { 400000, 300000, 200000, 100000 };
@@ -503,6 +509,12 @@ static int mmc_devfreq_set_target(struct device *dev,
 
 	if (!(host && freq)) {
 		pr_err("%s: unexpected host/freq parameter\n", __func__);
+		err = -EINVAL;
+		goto out;
+	}
+
+	if (!host->card) {
+		pr_err("%s: card is null, and reject the action\n", __func__);
 		err = -EINVAL;
 		goto out;
 	}
@@ -984,8 +996,6 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
 	} else {
 		mmc_should_fail_request(host, mrq);
 
-		led_trigger_event(host->led, LED_OFF);
-
 		if (mrq->sbc) {
 			pr_debug("%s: req done <CMD%u>: %d: %08x %08x %08x %08x\n",
 				mmc_hostname(host), mrq->sbc->opcode,
@@ -1157,7 +1167,6 @@ static int mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)
 #endif
 	}
 	mmc_host_clk_hold(host);
-	led_trigger_event(host->led, LED_FULL);
 
 	if (mmc_is_data_request(mrq)) {
 		mmc_deferred_scaling(host);
@@ -1364,7 +1373,7 @@ void mmc_check_bkops(struct mmc_card *card)
 
 	mmc_update_bkops_level(&card->bkops.stats,
 				card->ext_csd.raw_bkops_status);
-
+	card->bkops_level = card->ext_csd.raw_bkops_status;
 	card->bkops.needs_bkops = card->ext_csd.raw_bkops_status > 0;
 }
 EXPORT_SYMBOL(mmc_check_bkops);
@@ -1526,16 +1535,32 @@ static int mmc_wait_for_data_req_done(struct mmc_host *host,
 	return err;
 }
 
+#define MMC_REQUEST_TIMEOUT	10000 /* 10 sec */
 static void mmc_wait_for_req_done(struct mmc_host *host,
 				  struct mmc_request *mrq)
 {
 	struct mmc_command *cmd;
+	unsigned long timeout;
+	int ret;
 
 	while (1) {
-		wait_for_completion_io(&mrq->completion);
-
 		cmd = mrq->cmd;
 
+		/* timeout value setting is based on controller driver(sdhci.c) */
+		if (cmd->busy_timeout > MMC_REQUEST_TIMEOUT)
+			timeout = (cmd->busy_timeout * 2) + 3000;
+		else
+			timeout = MMC_REQUEST_TIMEOUT + 3000;
+		ret = wait_for_completion_io_timeout(&mrq->completion,
+			msecs_to_jiffies(timeout));
+
+		if (ret == 0) {
+			pr_err("%s: CMD%u %s timeout (%lums)\n",
+					mmc_hostname(host), cmd->opcode,
+					__func__, timeout);
+			cmd->error = -ETIMEDOUT;
+			break;
+		}
 		/*
 		 * If host has timed out waiting for the sanitize/bkops
 		 * to complete, card might be still in programming state
@@ -3187,7 +3212,7 @@ void mmc_power_cycle(struct mmc_host *host, u32 ocr)
 {
 	mmc_power_off(host);
 	/* Wait at least 1 ms according to SD spec */
-	mmc_delay(1);
+	mmc_delay(50);
 	mmc_power_up(host, ocr);
 }
 
@@ -3449,14 +3474,6 @@ static unsigned int mmc_mmc_erase_timeout(struct mmc_card *card,
 			erase_timeout = 1;
 	}
 
-	/* Multiplier for secure operations */
-	if (arg & MMC_SECURE_ARGS) {
-		if (arg == MMC_SECURE_ERASE_ARG)
-			erase_timeout *= card->ext_csd.sec_erase_mult;
-		else
-			erase_timeout *= card->ext_csd.sec_trim_mult;
-	}
-
 	erase_timeout *= qty;
 
 	/*
@@ -3570,6 +3587,7 @@ static int mmc_cmdq_do_erase(struct mmc_cmdq_req *cmdq_req,
 	unsigned long timeout;
 	unsigned int fr, nr;
 	int err;
+	ktime_t start, diff;
 
 	fr = from;
 	nr = to - from + 1;
@@ -3592,6 +3610,7 @@ static int mmc_cmdq_do_erase(struct mmc_cmdq_req *cmdq_req,
 	if (err)
 		goto out;
 
+	start = ktime_get();
 	err = mmc_cmdq_send_erase_cmd(cmdq_req, card, MMC_ERASE,
 			arg, qty);
 	if (err)
@@ -3622,6 +3641,17 @@ static int mmc_cmdq_do_erase(struct mmc_cmdq_req *cmdq_req,
 		}
 	} while (!(cmd->resp[0] & R1_READY_FOR_DATA) ||
 		 (R1_CURRENT_STATE(cmd->resp[0]) == R1_STATE_PRG));
+
+	diff = ktime_sub(ktime_get(), start);
+	if (ktime_to_ms(diff) >= 3000)
+		pr_info("%s: erase(sector %u to %u) takes %lld ms\n",
+			mmc_hostname(card->host), from, to, ktime_to_ms(diff));
+
+	card->host->perf.erase_blks += (to - from + 1);
+	card->host->perf.erase_time =
+		ktime_add(card->host->perf.erase_time, diff);
+	card->host->perf.erase_rq++;
+
 out:
 	trace_mmc_blk_erase_end(arg, fr, nr);
 	return err;
@@ -3635,6 +3665,7 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 	unsigned long timeout;
 	unsigned int fr, nr;
 	int err;
+	ktime_t start, diff;
 
 	fr = from;
 	nr = to - from + 1;
@@ -3677,6 +3708,7 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 		goto out;
 	}
 
+	start = ktime_get();
 	memset(&cmd, 0, sizeof(struct mmc_command));
 	cmd.opcode = MMC_ERASE;
 	cmd.arg = arg;
@@ -3720,6 +3752,16 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 
 	} while (!(cmd.resp[0] & R1_READY_FOR_DATA) ||
 		 (R1_CURRENT_STATE(cmd.resp[0]) == R1_STATE_PRG));
+
+	diff = ktime_sub(ktime_get(), start);
+	if (ktime_to_ms(diff) >= 3000)
+		pr_info("%s: erase(sector %u to %u) takes %lld ms\n",
+			mmc_hostname(card->host), from, to, ktime_to_ms(diff));
+
+	card->host->perf.erase_blks += (to - from + 1);
+	card->host->perf.erase_time =
+		ktime_add(card->host->perf.erase_time, diff);
+	card->host->perf.erase_rq++;
 out:
 	mmc_retune_release(card->host);
 	trace_mmc_blk_erase_end(arg, fr, nr);
@@ -3747,10 +3789,6 @@ int mmc_erase_sanity_check(struct mmc_card *card, unsigned int from,
 	    !(card->ext_csd.sec_feature_support & EXT_CSD_SEC_GB_CL_EN))
 		return -EOPNOTSUPP;
 
-	if (arg == MMC_SECURE_ERASE_ARG) {
-		if (from % card->erase_size || nr % card->erase_size)
-			return -EINVAL;
-	}
 	return 0;
 }
 
@@ -3892,10 +3930,6 @@ EXPORT_SYMBOL(mmc_can_discard);
 
 int mmc_can_sanitize(struct mmc_card *card)
 {
-	if (!mmc_can_trim(card) && !mmc_can_erase(card))
-		return 0;
-	if (card->ext_csd.sec_feature_support & EXT_CSD_SEC_SANITIZE)
-		return 1;
 	return 0;
 }
 EXPORT_SYMBOL(mmc_can_sanitize);
@@ -4185,7 +4219,7 @@ int mmc_detect_card_removed(struct mmc_host *host)
 	host->detect_change = 0;
 	if (!ret) {
 		ret = _mmc_detect_card_removed(host);
-		if (ret && (host->caps & MMC_CAP_NEEDS_POLL)) {
+		if (ret) {
 			/*
 			 * Schedule a detect work as soon as possible to let a
 			 * rescan handle the card removal.
@@ -4217,6 +4251,11 @@ void mmc_rescan(struct work_struct *work)
 	struct mmc_host *host =
 		container_of(work, struct mmc_host, detect.work);
 
+	if (mmc_is_sd_host(host))
+		pr_info("%s: %s rescan_disable %d nonremovable %d rescan_entered %d\n",
+			mmc_hostname(host), __func__, host->rescan_disable,
+			(host->caps & MMC_CAP_NONREMOVABLE) ? 1 : 0, host->rescan_entered);
+
 	if (host->trigger_card_event && host->ops->card_event) {
 		host->ops->card_event(host);
 		host->trigger_card_event = false;
@@ -4232,6 +4271,7 @@ void mmc_rescan(struct work_struct *work)
 	/* If there is a non-removable card registered, only scan once */
 	if ((host->caps & MMC_CAP_NONREMOVABLE) && host->rescan_entered)
 		return;
+
 	host->rescan_entered = 1;
 
 	mmc_bus_get(host);
@@ -4268,7 +4308,7 @@ void mmc_rescan(struct work_struct *work)
 	mmc_bus_put(host);
 
 	if (!(host->caps & MMC_CAP_NONREMOVABLE) && host->ops->get_cd &&
-			host->ops->get_cd(host) == 0) {
+			(host->ops->get_cd(host) == 0 || host->removed_cnt > MMC_DETECT_RETRIES)) {
 		mmc_claim_host(host);
 		mmc_power_off(host);
 		mmc_release_host(host);

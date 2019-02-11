@@ -39,6 +39,8 @@
 #define SUBSTREAM_FLAG_DATA_EP_STARTED	0
 #define SUBSTREAM_FLAG_SYNC_EP_STARTED	1
 
+extern void htc_pd_controller_restart(void); /* HTC_AUD: add usb reset function */
+
 /* return the estimated delay based on USB frame counters */
 snd_pcm_uframes_t snd_usb_pcm_delay(struct snd_usb_substream *subs,
 				    unsigned int rate)
@@ -538,6 +540,12 @@ static int set_format(struct snd_usb_substream *subs, struct audioformat *fmt)
 			dev_err(&dev->dev,
 				"%d:%d: usb_set_interface failed (%d)\n",
 				fmt->iface, fmt->altsetting, err);
+/* HTC_AUD_START - reset PD to recover if hit timeout */
+			if (err == -ETIMEDOUT) {
+				dev_err(&dev->dev,"usb_set_interface timeout: trigger reset\n");
+				htc_pd_controller_restart();
+			}
+/* HTC_AUD_END */
 			return -EIO;
 		}
 		dev_dbg(&dev->dev, "setting usb interface %d:%d\n",

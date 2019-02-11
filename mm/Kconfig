@@ -506,6 +506,13 @@ config CMA_DEBUGFS
 	help
 	  Turns on the DebugFS interface for CMA.
 
+config CMA_PINPAGE_MIGRATION
+	bool "CMA pinned page migration (EXPERIMENTAL)"
+	depends on CMA
+	default n
+	help
+	  Turns on cma page migration for pinned page.
+
 config CMA_AREAS
 	int "Maximum count of the CMA areas"
 	depends on CMA

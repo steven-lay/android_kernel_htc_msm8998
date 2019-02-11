@@ -98,7 +98,7 @@
 };
 
 &pm8998_gpios {
-	/* GPIO 6 for Vol+ Key */
+/*	GPIO 6 for Vol+ Key
 	gpio@c500 {
 		status = "okay";
 		qcom,mode = <0>;
@@ -107,7 +107,7 @@
 		qcom,src-sel = <0>;
 		qcom,out-strength = <1>;
 	};
-
+*/
 	/* GPIO 7 for Snapshot Key */
 	gpio@c600 {
 		status = "okay";

@@ -860,6 +860,8 @@ ice_err:
 	if (err)
 		cmdq_runtime_pm_put(cq_host);
 out:
+	if (err)
+		cmdq_runtime_pm_put(cq_host);
 	return err;
 }
 

@@ -1319,6 +1319,11 @@ static int _request_firmware(struct fw_desc *desc)
 
 	ret = 0;
 	timeout = firmware_loading_timeout();
+
+	//reduce timeout to 1s for msadp
+	if ( loading_timeout > 0 && !strncmp(desc->name, "msadp", 5))
+		timeout =1 * HZ; // 1s
+
 	if (desc->opt_flags & FW_OPT_NOWAIT) {
 		timeout = usermodehelper_read_lock_wait(timeout);
 		if (!timeout) {

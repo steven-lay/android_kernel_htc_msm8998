@@ -35,6 +35,7 @@
 #include <soc/qcom/subsystem_restart.h>
 #include <soc/qcom/subsystem_notif.h>
 #include <soc/qcom/sysmon.h>
+#include <linux/htc_flags.h>
 #include <trace/events/trace_msm_pil_event.h>
 
 #include <asm/current.h>
@@ -158,6 +159,12 @@ struct subsys_device {
 	struct subsys_desc *desc;
 	struct work_struct work;
 	struct wakeup_source ssr_wlock;
+/* Modem_BSP++ */
+/* Debug modem SSR hang */
+#if defined(CONFIG_HTC_DEBUG_SSR)
+	struct delayed_work ssr_check_wq;
+#endif
+/* Modem_BSP-- */
 	char wlname[64];
 	char error_buf[64];
 	struct work_struct device_restart_work;
@@ -169,6 +176,9 @@ struct subsys_device {
 	int count;
 	int id;
 	int restart_level;
+#if defined(CONFIG_HTC_FEATURES_SSR)
+	bool enable_ramdump;
+#endif
 	int crash_count;
 	struct subsys_soc_restart_order *restart_order;
 	bool do_ramdump_on_put;
@@ -304,6 +314,182 @@ static ssize_t system_debug_store(struct device *dev,
 	return orig_count;
 }
 
+static ssize_t crashed_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	bool crashed = to_subsys(dev)->crashed;
+
+	if (crashed)
+		return snprintf(buf, PAGE_SIZE, "%s\n", "TRUE");
+	else
+		return snprintf(buf, PAGE_SIZE, "%s\n", "FALSE");
+}
+
+static ssize_t crashed_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct subsys_device *subsys = to_subsys(dev);
+	const char *p;
+
+	p = memchr(buf, '\n', count);
+	if (p)
+		count = p - buf;
+
+	if (!strncasecmp(buf, "FALSE", count)) {
+		subsys->crashed = false;
+		return count;
+	}
+	return -EPERM;
+}
+
+#if defined(CONFIG_HTC_FEATURES_SSR)
+static const char * const enable_ramdumps_str[] = {
+	"DISABLE",
+	"ENABLE",
+};
+
+static ssize_t enable_ramdump_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int enable_ramdump = to_subsys(dev)->enable_ramdump;
+
+	return snprintf(buf, PAGE_SIZE, "%s\n", enable_ramdumps_str[enable_ramdump]);
+}
+
+static ssize_t enable_ramdump_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct subsys_device *subsys = to_subsys(dev);
+	int i, orig_count = count;
+	const char *p;
+
+	p = memchr(buf, '\n', count);
+	if (p)
+		count = p - buf;
+
+	for (i = 0; i < ARRAY_SIZE(enable_ramdumps_str); i++)
+		if (!strncasecmp(buf, enable_ramdumps_str[i], count)) {
+			subsys->enable_ramdump = i;
+			return orig_count;
+		}
+
+	return -EPERM;
+}
+
+void subsys_set_enable_ramdump(struct subsys_device *dev, int enable)
+{
+	dev->enable_ramdump = enable;
+}
+
+void subsys_set_restart_level(struct subsys_device *dev, int level)
+{
+	dev->restart_level = level;
+}
+
+
+static void subsys_config_default_enable_ramdump(struct subsys_device *dev)
+{
+	subsys_set_enable_ramdump(dev, false);
+}
+
+static void subsys_config_default_restart_level(struct subsys_device *dev)
+{
+	subsys_set_restart_level(dev, RESET_SOC);
+}
+
+void subsys_config_modem_enable_ramdump(struct subsys_device *dev)
+{
+	bool b0 = IS_ENABLED(CONFIG_HTC_FEATURES_SSR_MODEM_ENABLE);
+	bool b1 = !!(get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_MODEM);
+	bool b2 = !!(get_radio_flag() & BIT(3));
+	bool enable = (b0 ^ b1) && b2;
+
+	subsys_set_enable_ramdump(dev, enable);
+}
+
+void subsys_config_modem_restart_level(struct subsys_device *dev)
+{
+	bool b0 = IS_ENABLED(CONFIG_HTC_FEATURES_SSR_MODEM_ENABLE);
+	bool b1 = !!(get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_MODEM);
+	bool enable = b0 ^ b1;
+
+	subsys_set_restart_level(dev, enable);
+}
+
+static void subsys_config_slpi_enable_ramdump(struct subsys_device *dev)
+{
+	bool b0 = IS_ENABLED(CONFIG_HTC_FEATURES_SSR_SLPI_ENABLE);
+	bool b1 = !!(get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_SLPI);
+	bool b2 = false;//!!(get_radio_flag() & BIT(3));
+	bool enable = (b0 ^ b1) && b2;
+
+	subsys_set_enable_ramdump(dev, enable);
+}
+
+static void subsys_config_slpi_restart_level(struct subsys_device *dev)
+{
+	bool b0 = IS_ENABLED(CONFIG_HTC_FEATURES_SSR_SLPI_ENABLE);
+	bool b1 = !!(get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_SLPI);
+	bool enable = b0 ^ b1;
+
+	subsys_set_restart_level(dev, enable);
+}
+
+static void subsys_config_adsp_restart_level(struct subsys_device *dev)
+{
+	bool b0 = IS_ENABLED(CONFIG_HTC_FEATURES_SSR_LPASS_ENABLE);
+	bool b1 = !!(get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_LPASS);
+	bool enable = b0 || b1;
+
+	subsys_set_restart_level(dev, enable);
+}
+
+static void subsys_config_wcnss_restart_level(struct subsys_device *dev)
+{
+	bool b0 = IS_ENABLED(CONFIG_HTC_FEATURES_SSR_WCNSS_ENABLE);
+	bool b1 = !!(get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_WCNSS);
+	bool enable = b0 || b1;
+
+	subsys_set_restart_level(dev, enable);
+}
+
+void subsys_config_enable_ramdump(struct subsys_device *dev)
+{
+	if (!strcmp(htc_get_bootmode(),"ftm"))
+		return subsys_config_default_enable_ramdump(dev);
+
+	if (!strcmp(dev->desc->name, "modem"))
+		return subsys_config_modem_enable_ramdump(dev);
+
+	if (!strcmp(htc_get_bootmode(),"factory2"))
+		return subsys_config_default_enable_ramdump(dev);
+
+	if (!strcmp(dev->desc->name, "slpi"))
+		return subsys_config_slpi_enable_ramdump(dev);
+
+	return subsys_config_default_enable_ramdump(dev);
+}
+
+void subsys_config_restart_level(struct subsys_device *dev)
+{
+	if (!strcmp(htc_get_bootmode(),"ftm"))
+		return subsys_config_default_restart_level(dev);
+
+	if (!strcmp(dev->desc->name, "modem"))
+		return subsys_config_modem_restart_level(dev);
+
+	if (!strcmp(htc_get_bootmode(),"factory2"))
+		return subsys_config_default_restart_level(dev);
+
+	if (!strcmp(dev->desc->name, "adsp"))
+		return subsys_config_adsp_restart_level(dev);
+
+	if (!strcmp(dev->desc->name, "slpi"))
+		return subsys_config_slpi_restart_level(dev);
+
+	if (!strcmp(dev->desc->name, "wcnss"))
+		return subsys_config_wcnss_restart_level(dev);
+
+	return subsys_config_default_restart_level(dev);
+}
+#endif
+
 int subsys_get_restart_level(struct subsys_device *dev)
 {
 	return dev->restart_level;
@@ -325,11 +511,13 @@ static void subsys_set_state(struct subsys_device *subsys,
 	spin_unlock_irqrestore(&subsys->track.s_lock, flags);
 }
 
+#if 0
 static ssize_t error_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	return snprintf(buf, PAGE_SIZE, "%s\n", to_subsys(dev)->error_buf);
 }
+#endif
 
 /**
  * subsytem_default_online() - Mark a subsystem as online by default
@@ -349,7 +537,10 @@ static struct device_attribute subsys_attrs[] = {
 	__ATTR_RO(name),
 	__ATTR_RO(state),
 	__ATTR_RO(crash_count),
-	__ATTR_RO(error),
+#if defined(CONFIG_HTC_FEATURES_SSR)
+	__ATTR(enable_ramdump, 0644, enable_ramdump_show, enable_ramdump_store),
+#endif
+	__ATTR(crashed, 0644, crashed_show, crashed_store),
 	__ATTR(restart_level, 0644, restart_level_show, restart_level_store),
 	__ATTR(firmware_name, 0644, firmware_name_show, firmware_name_store),
 	__ATTR(system_debug, 0644, system_debug_show, system_debug_store),
@@ -471,6 +662,9 @@ out:
 
 static int is_ramdump_enabled(struct subsys_device *dev)
 {
+#if defined(CONFIG_HTC_FEATURES_SSR)
+	return dev->enable_ramdump;
+#endif
 	if (dev->desc->ramdump_disable_gpio)
 		return !dev->desc->ramdump_disable;
 
@@ -535,7 +729,11 @@ static void notify_each_subsys_device(struct subsys_device **list,
 			send_sysmon_notif(dev);
 
 		notif_data.crashed = subsys_get_crash_status(dev);
+#if defined (CONFIG_HTC_FEATURES_SSR)
+		notif_data.enable_ramdump = dev->enable_ramdump;
+#else
 		notif_data.enable_ramdump = is_ramdump_enabled(dev);
+#endif
 		notif_data.enable_mini_ramdumps = enable_mini_ramdumps;
 		notif_data.no_auth = dev->desc->no_auth;
 		notif_data.pdev = pdev;
@@ -563,6 +761,10 @@ static void enable_all_irqs(struct subsys_device *dev)
 		enable_irq(dev->desc->generic_irq);
 		irq_set_irq_wake(dev->desc->generic_irq, 1);
 	}
+	//Modem_BSP++
+	if (dev->desc->reboot_req_irq && dev->desc->reboot_req_handler)
+		enable_irq(dev->desc->reboot_req_irq);
+	//Modem_BSP--
 }
 
 static void disable_all_irqs(struct subsys_device *dev)
@@ -581,6 +783,10 @@ static void disable_all_irqs(struct subsys_device *dev)
 		disable_irq(dev->desc->generic_irq);
 		irq_set_irq_wake(dev->desc->generic_irq, 0);
 	}
+	//Modem_BSP++
+	if (dev->desc->reboot_req_irq && dev->desc->reboot_req_handler)
+		disable_irq(dev->desc->reboot_req_irq);
+	//Modem_BSP--
 }
 
 static int wait_for_err_ready(struct subsys_device *subsys)
@@ -1187,8 +1393,10 @@ enum crash_status subsys_get_crash_status(struct subsys_device *dev)
 
 void subsys_set_error(struct subsys_device *dev, const char *error_msg)
 {
-	snprintf(dev->error_buf, sizeof(dev->error_buf), "%s", error_msg);
-	sysfs_notify(&dev->dev.kobj, NULL, "error");
+	if (!WARN(dev == 0, "dev is NULL")) {
+		snprintf(dev->error_buf, sizeof(dev->error_buf), "%s", error_msg);
+		sysfs_notify(&dev->dev.kobj, NULL, "error");
+	}
 }
 
 static struct subsys_device *desc_to_subsys(struct device *d)
@@ -1495,6 +1703,12 @@ static int subsys_parse_devicetree(struct subsys_desc *desc)
 	if (ret && ret != -ENOENT)
 		return ret;
 
+	//Modem_BSP++
+	ret = __get_irq(desc, "qcom,gpio-reboot-req", &desc->reboot_req_irq, NULL);
+	if (ret && ret != -ENOENT)
+		return ret;
+	//Modem_BSP--
+
 	ret = __get_gpio(desc, "qcom,gpio-force-stop", &desc->force_stop_gpio);
 	if (ret && ret != -ENOENT)
 		return ret;
@@ -1549,6 +1763,20 @@ static int subsys_setup_irqs(struct subsys_device *subsys)
 		}
 		disable_irq(desc->err_fatal_irq);
 	}
+
+	//Modem_BSP++
+	if (desc->reboot_req_irq && desc->reboot_req_handler) {
+		ret = devm_request_irq(desc->dev, desc->reboot_req_irq,
+				desc->reboot_req_handler,
+				IRQF_TRIGGER_RISING, desc->name, desc);
+		if (ret < 0) {
+			dev_err(desc->dev, "[%s]: Unable to register reboot req IRQ handler!: %d\n",
+				desc->name, ret);
+			return ret;
+		}
+		disable_irq(desc->reboot_req_irq);
+	}
+	//Modem_BSP--
 
 	if (desc->stop_ack_irq && desc->stop_ack_handler) {
 		ret = devm_request_irq(desc->dev, desc->stop_ack_irq,
@@ -1616,6 +1844,10 @@ static void subsys_free_irqs(struct subsys_device *subsys)
 		devm_free_irq(desc->dev, desc->wdog_bite_irq, desc);
 	if (desc->err_ready_irq)
 		devm_free_irq(desc->dev, desc->err_ready_irq, subsys);
+	//Modem_BSP++
+	if (desc->reboot_req_irq && desc->reboot_req_handler)
+		devm_free_irq(desc->dev, desc->reboot_req_irq, desc);
+	//Modem_BSP--
 }
 
 struct subsys_device *subsys_register(struct subsys_desc *desc)
@@ -1710,6 +1942,9 @@ struct subsys_device *subsys_register(struct subsys_desc *desc)
 	INIT_LIST_HEAD(&subsys->list);
 	list_add_tail(&subsys->list, &subsys_list);
 	mutex_unlock(&subsys_list_lock);
+
+	subsys_config_enable_ramdump(subsys);
+	subsys_config_restart_level(subsys);
 
 	return subsys;
 err_sysmon_glink_register:

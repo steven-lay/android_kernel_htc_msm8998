@@ -550,10 +550,12 @@
 		qcom,bam-consumer-pipe-index = <10>;
 		qcom,bam-producer-pipe-index = <11>;
 		qcom,master-id = <84>;
+		/*
 		qcom,use-pinctrl;
 		pinctrl-names = "spi_default", "spi_sleep";
 		pinctrl-0 = <&spi_9_active>;
 		pinctrl-1 = <&spi_9_sleep>;
+		*/
 		clock-names = "iface_clk", "core_clk";
 		clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
 			 <&clock_gcc clk_gcc_blsp2_qup3_spi_apps_clk>;

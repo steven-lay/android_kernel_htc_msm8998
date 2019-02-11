@@ -762,7 +762,7 @@
 					/* Speed bin 4 */
 					<300000000  633600000  902400000
 					1113600000 1401600000 1536000000
-					1747200000 1843200000>;
+					1612800000 1843200000>;
 
 				qcom,allow-voltage-interpolation;
 				qcom,allow-quotient-interpolation;

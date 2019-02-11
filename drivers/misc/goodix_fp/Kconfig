@@ -1,0 +1,21 @@
+#
+# Fingerprint driver configuration 
+#
+menu "Goodix fingerprint SPI driver"
+config GOODIX_FP
+       default n
+       tristate "Goodix BTP fingerprint sensor support"
+       depends on SPI_MASTER
+
+config HTC_DISABLE_CHARGING
+       default n
+       tristate "HTC FP disable charging while capturing image during enroll/verify"
+       depends on GOODIX_FP
+
+config HTC_PCN_HAL_FOOTPRINT_CMD
+       default n
+       tristate "HTC sync time at kernel from HAL layer!"
+       depends on GOODIX_FP
+
+endmenu
+

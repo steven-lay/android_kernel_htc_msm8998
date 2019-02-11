@@ -145,7 +145,7 @@ ifeq ($(CONFIG_COMMON_CLK_QCOM), y)
 endif
 snd-soc-wcd-cpe-objs := wcd_cpe_services.o wcd_cpe_core.o
 snd-soc-wsa881x-objs := wsa881x.o wsa881x-tables.o wsa881x-regmap.o wsa881x-temp-sensor.o
-snd-soc-wcd-mbhc-objs := wcd-mbhc-v2.o
+snd-soc-wcd-mbhc-objs := wcd-mbhc-v2.o htc-mbhc-headset.o
 snd-soc-wsa881x-analog-objs := wsa881x-analog.o wsa881x-tables-analog.o
 snd-soc-wsa881x-analog-objs += wsa881x-regmap-analog.o wsa881x-irq.o
 snd-soc-wcd-dsp-utils-objs := wcd-dsp-utils.o
@@ -425,5 +425,8 @@ obj-$(CONFIG_SND_SOC_MSM_STUB)  += snd-soc-msm-stub.o
 # Amp
 obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
-obj-y += sdm660_cdc/
+#HTC_AUD_START
+obj-$(CONFIG_SND_SOC_TAS2557) += tas2557mono/
+obj-$(CONFIG_SND_SOC_TAS2557_STEREO) += tas2557/
+#HTC_AUD_END
 obj-y += msm_sdw/

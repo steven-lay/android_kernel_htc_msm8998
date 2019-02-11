@@ -55,7 +55,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 		if (!bd->ops->check_fb ||
 		    bd->ops->check_fb(bd, evdata->info)) {
 			fb_blank = *(int *)evdata->data;
-			if (fb_blank == FB_BLANK_UNBLANK &&
+			if ((fb_blank == FB_BLANK_UNBLANK) &&
 			    !bd->fb_bl_on[node]) {
 				bd->fb_bl_on[node] = true;
 				if (!bd->use_count++) {

@@ -417,6 +417,14 @@ config BACKLIGHT_PANDORA
 	  If you have a Pandora console, say Y to enable the
 	  backlight driver.
 
+config BACKLIGHT_TI_LMU
+	tristate "Backlight driver for TI LMU"
+	depends on BACKLIGHT_CLASS_DEVICE && MFD_TI_LMU
+	help
+	  Say Y to enable the backlight driver for TI LMU devices.
+	  This supports LM3532, LM36272/4, LM3631, LM3632, LM3633, LM3695
+	  and LM3697.
+
 config BACKLIGHT_SKY81452
 	tristate "Backlight driver for SKY81452"
 	depends on BACKLIGHT_CLASS_DEVICE && MFD_SKY81452

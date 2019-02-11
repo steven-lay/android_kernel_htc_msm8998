@@ -34,6 +34,13 @@
 #define DEFAULT_NUM_REQS_TO_START_PACK 17
 
 /*
+  * This global sg point is for keep memory for SD card.
+  * To avoid out of memory problem.
+  */
+struct scatterlist	*cur_sg = NULL;
+struct scatterlist	*prev_sg = NULL;
+
+/*
  * Prepare a MMC request. This just filters out odd stuff.
  */
 static int mmc_prep_request(struct request_queue *q, struct request *req)
@@ -247,7 +254,7 @@ static void mmc_request_fn(struct request_queue *q)
 		wake_up_process(mq->thread);
 }
 
-static struct scatterlist *mmc_alloc_sg(int sg_len, int *err)
+struct scatterlist *mmc_alloc_sg(int sg_len, int *err)
 {
 	struct scatterlist *sg;
 
@@ -261,6 +268,7 @@ static struct scatterlist *mmc_alloc_sg(int sg_len, int *err)
 
 	return sg;
 }
+EXPORT_SYMBOL(mmc_alloc_sg);
 
 static void mmc_queue_setup_discard(struct request_queue *q,
 				    struct mmc_card *card)
@@ -446,17 +454,40 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 retry:
 		blk_queue_max_segments(mq->queue, host->max_segs);
 
-		mqrq_cur->sg = mmc_alloc_sg(host->max_segs, &ret);
-		if (ret == -ENOMEM)
-			goto cur_sg_alloc_failed;
-		else if (ret)
-			goto cleanup_queue;
+		if (mmc_card_sd(card)) {
+			if (!cur_sg) {
+				cur_sg = mmc_alloc_sg(host->max_segs, &ret);
+				mqrq_cur->sg = cur_sg;
+				if (ret == -ENOMEM)
+					goto cur_sg_alloc_failed;
+				else if (ret)
+					goto cleanup_queue;
+			} else {
+				mqrq_cur->sg = cur_sg;
+			}
+			if (!prev_sg) {
+				prev_sg = mmc_alloc_sg(host->max_segs, &ret);
+				mqrq_prev->sg = prev_sg;
+				if (ret == -ENOMEM)
+					goto prev_sg_alloc_failed;
+				else if (ret)
+					goto cleanup_queue;
+			} else {
+				mqrq_prev->sg = prev_sg;
+			}
+		} else {
+			mqrq_cur->sg = mmc_alloc_sg(host->max_segs, &ret);
+			if (ret == -ENOMEM)
+				goto cur_sg_alloc_failed;
+			else if (ret)
+				goto cleanup_queue;
 
-		mqrq_prev->sg = mmc_alloc_sg(host->max_segs, &ret);
-		if (ret == -ENOMEM)
-			goto prev_sg_alloc_failed;
-		else if (ret)
-			goto cleanup_queue;
+			mqrq_prev->sg = mmc_alloc_sg(host->max_segs, &ret);
+			if (ret == -ENOMEM)
+				goto prev_sg_alloc_failed;
+			else if (ret)
+				goto cleanup_queue;
+		}
 
 		goto success;
 
@@ -480,8 +511,11 @@ success:
 	if (card->host->ops->init)
 		card->host->ops->init(card->host);
 
-	mq->thread = kthread_run(mmc_queue_thread, mq, "mmcqd/%d%s",
-		host->index, subname ? subname : "");
+	if (mmc_card_sd(card))
+		mq->thread = kthread_run(mmc_queue_thread, mq, "sd-qd");
+	else
+		mq->thread = kthread_run(mmc_queue_thread, mq, "mmcqd/%d%s",
+				host->index, subname ? subname : "");
 
 	if (IS_ERR(mq->thread)) {
 		ret = PTR_ERR(mq->thread);
@@ -490,20 +524,26 @@ success:
 
 	return 0;
  free_bounce_sg:
-	kfree(mqrq_cur->bounce_sg);
+	if (mqrq_cur->bounce_sg)
+		kfree(mqrq_cur->bounce_sg);
 	mqrq_cur->bounce_sg = NULL;
-	kfree(mqrq_prev->bounce_sg);
+	if (mqrq_prev->bounce_sg)
+		kfree(mqrq_prev->bounce_sg);
 	mqrq_prev->bounce_sg = NULL;
 
  cleanup_queue:
-	kfree(mqrq_cur->sg);
+	if (mqrq_cur->sg)
+		kfree(mqrq_cur->sg);
 	mqrq_cur->sg = NULL;
-	kfree(mqrq_cur->bounce_buf);
+	if (mqrq_cur->bounce_buf)
+		kfree(mqrq_cur->bounce_buf);
 	mqrq_cur->bounce_buf = NULL;
 
-	kfree(mqrq_prev->sg);
+	if (mqrq_prev->sg)
+		kfree(mqrq_prev->sg);
 	mqrq_prev->sg = NULL;
-	kfree(mqrq_prev->bounce_buf);
+	if (mqrq_prev->bounce_buf)
+		kfree(mqrq_prev->bounce_buf);
 	mqrq_prev->bounce_buf = NULL;
 
 	blk_cleanup_queue(mq->queue);
@@ -529,24 +569,25 @@ void mmc_cleanup_queue(struct mmc_queue *mq)
 	blk_start_queue(q);
 	spin_unlock_irqrestore(q->queue_lock, flags);
 
-	kfree(mqrq_cur->bounce_sg);
-	mqrq_cur->bounce_sg = NULL;
+	if (!mmc_card_sd(mq->card)) {
+		kfree(mqrq_cur->bounce_sg);
+		mqrq_cur->bounce_sg = NULL;
 
-	kfree(mqrq_cur->sg);
-	mqrq_cur->sg = NULL;
+		kfree(mqrq_cur->sg);
+		mqrq_cur->sg = NULL;
 
-	kfree(mqrq_cur->bounce_buf);
-	mqrq_cur->bounce_buf = NULL;
+		kfree(mqrq_cur->bounce_buf);
+		mqrq_cur->bounce_buf = NULL;
 
-	kfree(mqrq_prev->bounce_sg);
-	mqrq_prev->bounce_sg = NULL;
+		kfree(mqrq_prev->bounce_sg);
+		mqrq_prev->bounce_sg = NULL;
 
-	kfree(mqrq_prev->sg);
-	mqrq_prev->sg = NULL;
+		kfree(mqrq_prev->sg);
+		mqrq_prev->sg = NULL;
 
-	kfree(mqrq_prev->bounce_buf);
-	mqrq_prev->bounce_buf = NULL;
-
+		kfree(mqrq_prev->bounce_buf);
+		mqrq_prev->bounce_buf = NULL;
+	}
 	mq->card = NULL;
 }
 EXPORT_SYMBOL(mmc_cleanup_queue);

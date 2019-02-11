@@ -153,6 +153,10 @@ source "drivers/usb/phy/Kconfig"
 
 source "drivers/usb/gadget/Kconfig"
 
+source "drivers/usb/tusb1044/Kconfig"
+
+source "drivers/usb/tps61099/Kconfig"
+
 config USB_LED_TRIG
 	bool "USB LED Triggers"
 	depends on LEDS_CLASS && USB_COMMON && LEDS_TRIGGERS
@@ -162,5 +166,16 @@ config USB_LED_TRIG
 	  Say Y here if you are working on a system with led-class supported
 	  LEDs and you want to use them as activity indicators for USB host or
 	  gadget.
+
+config HTC_USB_SENSELINK
+    bool "HTC feature for SenseLink"
+    help
+      Say Y to enable HTC SenseLink flag.
+
+config HTC_DEF_SSUSB
+    bool "Default enable SSUSB"
+    default n
+    help
+      Say Y to default enable SSUSB
 
 endif # USB_SUPPORT

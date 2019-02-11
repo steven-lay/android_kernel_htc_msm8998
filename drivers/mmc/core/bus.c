@@ -142,6 +142,10 @@ static void mmc_bus_shutdown(struct device *dev)
 		return;
 	}
 
+	if(mmc_card_sd(card)) {
+		return;
+	}
+
 	if (dev->driver && drv->shutdown)
 		drv->shutdown(card);
 

@@ -1,0 +1,145 @@
+/*
+ * msm8998-htc-common: common configs of HTC msm8998 projects
+ */
+
+/ {
+	aliases {
+		/* smdtty devices */
+		smd20 = &smdtty_data20;
+	};
+};
+
+&cont_splash_mem {
+        /* qct original reg = <0x0 0x9d600000 0x0 0x02400000>; */
+        reg = <0 0x9d400000 0 0x3000000>;
+        compatible = "shared-dma-pool";
+        reusable;
+};
+
+&pil_mba_mem {
+	/* qct original reg = <0 0x94100000 0 0x200000>; */
+	reg = <0 0x95900000 0 0x200000>;
+};
+
+&pil_ipa_gpu_mem {
+        /* qct original reg = <0 0x95200000 0 0x100000>; */
+        reg = <0 0x95800000 0 0x100000>;
+};
+
+&pil_slpi_mem {
+	/* qct original reg = <0 0x94300000 0 0xf00000>; */
+	reg = <0 0x94900000 0 0xf00000>;
+};
+
+&pil_video_mem {
+	/* qct original reg = <0 0x93c00000 0 0x500000>; */
+	reg = <0 0x94400000 0 0x500000>;
+};
+
+&modem_mem {
+	/* qct original reg = <0 0x8cc00000 0 0x7000000>; */
+	reg = <0 0x8cc00000 0 0x7800000>;
+};
+
+/ {
+        reserved-memory {
+		htc_reserve_region: htc_reserve_region@0 {
+			#address-cells = <2>;
+			#size-cells = <2>;
+			ranges;
+
+			htc_reserve1_mem: htc_reserve1_region@0 {
+				compatible = "removed-dma-pool";
+				no-map;
+				reg = <0 0x83300000 0 0x00500000>;
+			};
+		};
+
+                htc_rtel_mem: htc_rtel_region@0 {
+                        compatible = "shared-dma-pool";
+                        reusable;
+                        reg = <0 0x83800000 0 0x2000000>; /* 32 MB */
+                };
+
+		ramoops_mem: ramoops_region@0 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0 0x83100000 0 0x00200000>;
+		};
+	};
+
+	htc_ramoops@0 {
+		compatible = "htc,ramoops";
+		linux,contiguous-region = <&ramoops_mem>;
+		record-size = <0x00010000>;  /*  128 KB */
+		console-size = <0x00100000>; /* 1024 KB */
+		pmsg-size = <0x00080000>;    /*  512 KB */
+		ftrace-size = <0x00040000>;  /*  256 KB */
+		dump-oops = <0x1>;
+	};
+};
+
+&soc {
+    /* Modem_BSP */
+	htc_radio_smem {
+		compatible = "htc,htc_radio_smem";
+	};
+
+        qcom,rmtfs_rtel_sharedmem@0 {
+                compatible = "htc,rtel-uio";
+                reg = <0x83800000 0x02000000>;
+                memory-region = <&htc_rtel_mem>;
+                reg-names = "rtel";
+                qcom,client-id = <0x00000001>;
+        };
+
+        qcom,smdtty {
+                compatible = "qcom,smdtty";
+
+                smdtty_data20: qcom,smdtty-data20 {
+                        qcom,smdtty-remote = "modem";
+                        qcom,smdtty-port-name = "DATA20";
+                };
+        };
+
+	htc_mnemosyne@0 {
+		compatible = "htc,mnemosyne";
+		reg = <0x835F0000 0x2000>;
+		reg-names = "htc_mnemosyne_res";
+        };
+
+	qcom,rpm-stats-ver {
+		compatible = "qcom,rpm-stats-ver";
+		reg = <0x290000 0x4>;
+		reg-names = "rpm_data_base";
+	};
+};
+
+&spmi_bus {
+	qcom,pm8998@0 {
+		qcom,power-on@800 {
+			/delete-node/ qcom,pon_1;
+			/delete-node/ qcom,pon_2;
+			qcom,pon_3 {
+                                qcom,support-reset = <1>;
+                                qcom,s1-timer = <10256>;
+                                qcom,s2-timer = <2000>;
+                                qcom,s2-type = <8>;
+                        };
+		};
+	};
+};
+
+/ {
+	htc_battery_store {
+		compatible = "htc,htc_battery_store";
+		htc,stored-batt-magic-num = <(-1)>;
+		htc,stored-batt-soc = <(-1)>;
+		htc,stored-batt-update-time = <(-1)>;
+		htc,stored-batt-temperature = <(-1)>;
+		htc,stored-batt-total-level = <0>;
+		htc,stored-batt-overheat-sec = <0>;
+		htc,stored-batt-first-use = <0>;
+		htc,stored-batt-checksum = <0>;
+        };
+};

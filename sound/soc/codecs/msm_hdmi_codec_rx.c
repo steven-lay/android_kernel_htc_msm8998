@@ -434,6 +434,8 @@ static int msm_ext_disp_audio_codec_rx_probe(struct snd_soc_codec *codec)
 		return -ENODEV;
 	}
 
+/* HTC_AUD_START - prevent BB for non-support HDMI project */
+#ifdef CONFIG_MSM_EXT_DISPLAY
 	if (msm_ext_disp_register_audio_codec(codec_data->ext_disp_core_pdev,
 				&codec_data->ext_disp_ops)) {
 		dev_err(codec->dev, "%s(): can't register with ext disp core",
@@ -441,6 +443,8 @@ static int msm_ext_disp_audio_codec_rx_probe(struct snd_soc_codec *codec)
 		kfree(codec_data);
 		return -ENODEV;
 	}
+#endif
+/* HTC_AUD_END */
 
 	dev_set_drvdata(codec->dev, codec_data);
 

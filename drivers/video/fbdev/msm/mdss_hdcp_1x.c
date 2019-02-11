@@ -1087,7 +1087,7 @@ end:
 static int hdcp_1x_validate_downstream(struct hdcp_1x *hdcp)
 {
 	int rc;
-	u8 buf[2];
+	u8 buf[2] = {0};
 	u8 device_count, depth;
 	u8 max_cascade_exceeded, max_devs_exceeded;
 	u16 bstatus;

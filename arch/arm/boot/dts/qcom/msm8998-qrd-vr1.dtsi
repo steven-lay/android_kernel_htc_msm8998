@@ -124,14 +124,14 @@
 
 &pm8998_gpios {
 	/* GPIO 6 for Vol+ Key */
-	gpio@c500 {
+/*	gpio@c500 {
 		status = "okay";
 		qcom,mode = <0>;
 		qcom,pull = <0>;
 		qcom,vin-sel = <0>;
 		qcom,src-sel = <0>;
 		qcom,out-strength = <1>;
-	};
+	};*/
 
 	/* GPIO 21 (NFC_CLK_REQ) */
 	gpio@d400 {

@@ -589,6 +589,24 @@ enum soc_id {
 	SDM630_SOC_ID     = 4,
 };
 
+#if defined(CONFIG_ARCH_SDM660) || defined(CONFIG_ARCH_SDM630)
+#define HTC_TARGET_QUOT_LEN SDM660_KBSS_FUSE_CORNERS
+volatile u64 htc_target_quot[2][HTC_TARGET_QUOT_LEN];
+const int htc_target_quot_len = HTC_TARGET_QUOT_LEN;
+
+#if HTC_TARGET_QUOT_LEN != 5
+#error "check htc_target_quot size in cpuinfo.c"
+#endif
+#elif defined(CONFIG_ARCH_MSM8998)
+#define HTC_TARGET_QUOT_LEN MSM8998_KBSS_FUSE_CORNERS
+volatile u64 htc_target_quot[2][HTC_TARGET_QUOT_LEN];
+const int htc_target_quot_len = HTC_TARGET_QUOT_LEN;
+
+#if HTC_TARGET_QUOT_LEN != 4
+#error "check htc_target_quot size in cpuinfo.c"
+#endif
+#endif
+
 /**
  * cprh_msm8998_kbss_read_fuse_data() - load msm8998 KBSS specific fuse
  *		parameter values
@@ -634,6 +652,9 @@ static int cprh_msm8998_kbss_read_fuse_data(struct cpr3_regulator *vreg,
 				i, rc);
 			return rc;
 		}
+#if defined(CONFIG_ARCH_MSM8998)
+		htc_target_quot[id][i] = fuse->target_quot[i];
+#endif
 
 		rc = cpr3_read_fuse_param(base,
 				msm8998_kbss_ro_sel_param[id][i],
@@ -820,6 +841,9 @@ static int cprh_sdm630_kbss_read_fuse_data(struct cpr3_regulator *vreg,
 				i, rc);
 			return rc;
 		}
+#if defined(CONFIG_ARCH_SDM660) || defined(CONFIG_ARCH_SDM630)
+		htc_target_quot[id][i] = fuse->target_quot[i];
+#endif
 
 		rc = cpr3_read_fuse_param(base,
 				sdm630_kbss_ro_sel_param[id][i],

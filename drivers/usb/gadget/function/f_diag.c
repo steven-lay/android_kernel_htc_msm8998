@@ -29,6 +29,9 @@
 #include <linux/debugfs.h>
 #include <linux/kmemleak.h>
 #include <linux/qcom/diag_dload.h>
+#if DIAG_XPST
+#include "../../char/diag/diagchar.h"
+#endif
 
 #define MAX_INST_NAME_LEN	40
 
@@ -48,6 +51,7 @@ static DEFINE_SPINLOCK(ch_lock);
 static LIST_HEAD(usb_diag_ch_list);
 
 static struct dload_struct __iomem *diag_dload;
+bool vendor_cmd = false;
 
 static struct usb_interface_descriptor intf_desc = {
 	.bLength            =	sizeof intf_desc,
@@ -174,6 +178,9 @@ struct diag_context {
 	struct usb_composite_dev *cdev;
 	struct usb_diag_ch *ch;
 	struct kref kref;
+#if DIAG_XPST
+	bool opened;
+#endif
 
 	/* pkt counters */
 	unsigned long dpkts_tolaptop;
@@ -184,6 +191,7 @@ struct diag_context {
 	struct list_head list_item;
 };
 
+#include "../htc_vendor.c"
 static struct list_head diag_dev_list;
 
 static inline struct diag_context *func_to_diag(struct usb_function *f)
@@ -198,7 +206,7 @@ static void diag_context_release(struct kref *kref)
 		container_of(kref, struct diag_context, kref);
 
 	spin_unlock(&ctxt->lock);
-	kfree(ctxt);
+	//kfree(ctxt);
 }
 
 static void diag_update_pid_and_serial_num(struct diag_context *ctxt)
@@ -297,15 +305,37 @@ static void diag_read_complete(struct usb_ep *ep,
 	struct diag_context *ctxt = ep->driver_data;
 	struct diag_request *d_req = req->context;
 	unsigned long flags;
+#if DIAG_XPST
+	unsigned int cmd_id;
+#endif
 
 	d_req->actual = req->actual;
 	d_req->status = req->status;
+
+#if DIAG_XPST
+	if (diag7k_debug_mask)
+		print_hex_dump(KERN_DEBUG, "from PC: ", DUMP_PREFIX_ADDRESS, 16, 1,
+			req->buf, req->actual, 1);
+#endif
 
 	spin_lock_irqsave(&ctxt->lock, flags);
 	list_add_tail(&req->list, &ctxt->read_pool);
 	spin_unlock_irqrestore(&ctxt->lock, flags);
 
 	ctxt->dpkts_tomodem++;
+
+#if DIAG_XPST
+	cmd_id = *((unsigned short *)req->buf);
+	if ((ctxt == get_modem_ctxt()) && (if_route_to_userspace(ctxt, cmd_id) == 3)) {
+		vendor_cmd = false;
+		vendor_com_type = 3;
+	} else if ((ctxt == get_modem_ctxt()) && (if_route_to_userspace(ctxt, cmd_id) == 2)){
+		vendor_cmd = true;
+		vendor_com_type = 2;
+	} else {
+		vendor_cmd = false;
+	}
+#endif
 
 	if (ctxt->ch && ctxt->ch->notify)
 		ctxt->ch->notify(ctxt->ch->priv, USB_DIAG_READ_DONE, d_req);
@@ -357,7 +387,6 @@ struct usb_diag_ch *usb_diag_open(const char *name, void *priv,
 		list_add_tail(&ch->list, &usb_diag_ch_list);
 		spin_unlock_irqrestore(&ch_lock, flags);
 	}
-
 	return ch;
 }
 EXPORT_SYMBOL(usb_diag_open);
@@ -855,9 +884,12 @@ static struct diag_context *diag_context_init(const char *name)
 		spin_unlock_irqrestore(&ch_lock, flags);
 	}
 
+#if 0
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
 		return ERR_PTR(-ENOMEM);
+#endif
+	dev = &_context;
 
 	list_add_tail(&dev->list_item, &diag_dev_list);
 
@@ -881,7 +913,6 @@ static struct diag_context *diag_context_init(const char *name)
 	spin_lock_init(&dev->lock);
 	INIT_LIST_HEAD(&dev->read_pool);
 	INIT_LIST_HEAD(&dev->write_pool);
-
 	return dev;
 }
 

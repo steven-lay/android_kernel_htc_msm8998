@@ -1,7 +1,13 @@
 #
 # Makefile for nfc devices
 #
-
+ifneq ($(findstring JAPAN,$(PRIVATE_SKU_NAME)),JAPAN)
+ifeq ($(findstring OceanM,$(PRIVATE_SKU_NAME)),OceanM)
+CFLAGS_nq-nci-htc-mfg.o =   -DOCEAN_M_NFC_TVDD3V
+endif
+obj-$(CONFIG_SENSORS_NFC_PN553) += nq-nci-htc.o
+obj-$(CONFIG_SENSORS_NFC_PN553) += nq-nci-htc-mfg.o
+endif
 obj-$(CONFIG_NFC_FDP)		+= fdp/
 obj-$(CONFIG_NFC_PN544)		+= pn544/
 obj-$(CONFIG_NFC_MICROREAD)	+= microread/

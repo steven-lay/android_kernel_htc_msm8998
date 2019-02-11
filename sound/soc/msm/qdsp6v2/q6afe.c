@@ -27,6 +27,9 @@
 #include <sound/audio_cal_utils.h>
 #include <sound/adsp_err.h>
 #include <linux/qdsp6v2/apr_tal.h>
+/* HTC_AUD_START */
+#include <sound/htc_acoustic_alsa.h>
+/* HTC_AUD_END */
 
 #define WAKELOCK_TIMEOUT	5000
 enum {
@@ -132,6 +135,7 @@ static unsigned long afe_configured_cmd;
 static struct afe_ctl this_afe;
 
 #define TIMEOUT_MS 1000
+#define TIMEOUT_MS_FOR_USB_PORT 6000 /* HTC_AUD */
 #define Q6AFE_MAX_VOLUME 0x3FFF
 
 static int pcm_afe_instance[2];
@@ -750,6 +754,49 @@ static int afe_apr_send_pkt(void *data, wait_queue_head_t *wait)
 	pr_debug("%s: leave %d\n", __func__, ret);
 	return ret;
 }
+
+/* HTC_AUD_START */
+/*
+ * afe_apr_send_pkt_for_usb_port : similar to afe_apr_send_pkt
+ *      modify event timeout from TIMEOUT_MS to TIMEOUT_MS_FOR_USB_PORT
+ */
+static int afe_apr_send_pkt_for_usb_port(void *data, wait_queue_head_t *wait)
+{
+	int ret;
+
+	if (wait)
+		atomic_set(&this_afe.state, 1);
+	atomic_set(&this_afe.status, 0);
+	ret = apr_send_pkt(this_afe.apr, data);
+	if (ret > 0) {
+		if (wait) {
+			ret = wait_event_timeout(*wait,
+					(atomic_read(&this_afe.state) == 0),
+					msecs_to_jiffies(TIMEOUT_MS_FOR_USB_PORT));
+			if (!ret) {
+				ret = -ETIMEDOUT;
+			} else if (atomic_read(&this_afe.status) > 0) {
+				pr_err("%s: DSP returned error[%s]\n", __func__,
+					adsp_err_get_err_str(atomic_read(
+					&this_afe.status)));
+				ret = adsp_err_get_lnx_err_code(
+						atomic_read(&this_afe.status));
+			} else {
+				ret = 0;
+			}
+		} else {
+			ret = 0;
+		}
+	} else if (ret == 0) {
+		pr_err("%s: packet not transmitted\n", __func__);
+		/* apr_send_pkt can return 0 when nothing is transmitted */
+		ret = -EINVAL;
+	}
+
+	pr_debug("%s: leave %d\n", __func__, ret);
+	return ret;
+}
+/* HTC_AUD_END */
 
 static int afe_send_cal_block(u16 port_id, struct cal_block_data *cal_block)
 {
@@ -2349,7 +2396,16 @@ static int afe_send_cmd_port_start(u16 port_id)
 	pr_debug("%s: cmd device start opcode[0x%x] port id[0x%x]\n",
 		 __func__, start.hdr.opcode, start.port_id);
 
+/* HTC_AUD_START - Wait 6s for USB port due to USB timeout is 5s */
+#if 0
 	ret = afe_apr_send_pkt(&start, &this_afe.wait[index]);
+#else
+	if (port_id == AFE_PORT_ID_USB_RX || port_id == AFE_PORT_ID_USB_TX)
+		ret = afe_apr_send_pkt_for_usb_port(&start, &this_afe.wait[index]);
+	else
+		ret = afe_apr_send_pkt(&start, &this_afe.wait[index]);
+#endif
+/* HTC_AUD_END */
 	if (ret) {
 		pr_err("%s: AFE enable for port 0x%x failed %d\n", __func__,
 		       port_id, ret);

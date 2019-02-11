@@ -34,13 +34,13 @@
 	/delete-property/qcom,torch-source;
 	/delete-property/qcom,switch-source;
 };
-
+/*
 &led_flash1 {
 	/delete-property/qcom,flash-source;
 	/delete-property/qcom,torch-source;
 	/delete-property/qcom,switch-source;
 };
-
+*/
 
 &eeprom1 {
 	/delete-property/cam_vio-supply;

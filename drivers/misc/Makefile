@@ -66,3 +66,7 @@ obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
 obj-y				+= qcom/
 obj-$(CONFIG_QPNP_MISC) 	+= qpnp-misc.o
 obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
+obj-$(CONFIG_HTC_FLASHLIGHT) += htc_flashlight.o
+obj-$(CONFIG_VIB_TRIGGERS)	+= vib-triggers.o
+obj-$(CONFIG_FPR_FPC)  += fpr_FingerprintCard/
+obj-$(CONFIG_GOODIX_FP)  += goodix_fp/

@@ -77,8 +77,8 @@ static struct usb_interface_descriptor gser_interface_desc = {
 	/* .bInterfaceNumber = DYNAMIC */
 	.bNumEndpoints =	3,
 	.bInterfaceClass =	USB_CLASS_VENDOR_SPEC,
-	.bInterfaceSubClass =	0,
-	.bInterfaceProtocol =	0,
+	.bInterfaceSubClass =	0x51,
+	.bInterfaceProtocol =	1,
 	/* .iInterface = DYNAMIC */
 };
 
@@ -241,7 +241,7 @@ static struct usb_descriptor_header *gser_ss_function[] = {
 /* string descriptors: */
 
 static struct usb_string gser_string_defs[] = {
-	[0].s = "Generic Serial",
+	[0].s = "HTC Serial",
 	{  } /* end of list */
 };
 

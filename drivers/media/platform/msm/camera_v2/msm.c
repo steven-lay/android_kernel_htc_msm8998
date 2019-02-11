@@ -1398,7 +1398,7 @@ static int msm_probe(struct platform_device *pdev)
 		pr_warn("NON-FATAL: failed to create logsync base directory\n");
 	} else {
 		if (!debugfs_create_file(MSM_CAM_LOGSYNC_FILE_NAME,
-					 0666,
+					 0644, //HTC CTS permsission failed - Change 0666 to 0644
 					 cam_debugfs_root,
 					 NULL,
 					 &logsync_fops))

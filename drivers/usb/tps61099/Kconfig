@@ -1,0 +1,9 @@
+#
+# USB device configuration
+#
+
+config TPS61099
+	bool "TPS61099 external power source"
+	default n
+	help
+	  Say Y here to enable the TPS61099 external power source

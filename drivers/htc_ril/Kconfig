@@ -1,0 +1,6 @@
+config HTC_GARBAGE_FILTER
+	tristate "HTC_GARBAGE_FILTER"
+	default n
+	depends on MSM_SMD
+	---help---
+	  HTC Garbage Filter of TCP

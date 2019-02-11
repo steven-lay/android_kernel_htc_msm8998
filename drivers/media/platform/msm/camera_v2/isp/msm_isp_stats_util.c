@@ -411,6 +411,9 @@ int msm_isp_stats_create_stream(struct vfe_device *vfe_dev,
 		framedrop_period = msm_isp_get_framedrop_period(
 			stream_req_cmd->framedrop_pattern);
 		stream_info->framedrop_period = framedrop_period;
+		if(stream_req_cmd->stats_type == MSM_ISP_STATS_BF)
+			pr_err("%s: num_isp = %d, stream_info[%d, %x, %pK], framedrop_period = %d, req_cmd->framedrop_pattern = %d, framedrop_pattern = %d\n",
+				__func__, stream_info->num_isp, stream_info->session_id, stream_info->stream_id, stream_info, stream_info->framedrop_period, stream_req_cmd->framedrop_pattern, framedrop_pattern);
 	} else {
 		if (stream_info->vfe_mask & (1 << vfe_dev->pdev->id)) {
 			pr_err("%s: stats %d already requested for vfe %d\n",
@@ -435,11 +438,36 @@ int msm_isp_stats_create_stream(struct vfe_device *vfe_dev,
 			rc = -EINVAL;
 		framedrop_period = msm_isp_get_framedrop_period(
 			stream_req_cmd->framedrop_pattern);
+		if(stream_req_cmd->stats_type == MSM_ISP_STATS_BF)
+			pr_err("%s: num_isp = %d, stream_info[%d, %x, %pK], framedrop_period = %d, req_cmd->framedrop_pattern = %d, framedrop_pattern = %d\n",
+				__func__, stream_info->num_isp, stream_info->session_id, stream_info->stream_id, stream_info, stream_info->framedrop_period, stream_req_cmd->framedrop_pattern, framedrop_pattern);
+#if 0
 		if (stream_info->framedrop_period != framedrop_period)
 			rc = -EINVAL;
+#else   //HTC modify
+		if (stream_info->framedrop_period != framedrop_period)
+		{
+			pr_err("[CAM]%s: Stats stream param mismatch between vfe, try to get framedrop_period again...\n", __func__);
+			pr_err("[CAM]%s: stream_info session_id 0x%x, composite_flag 0x%x, stats_type %d, framedrop_pattern %d\n",
+				__func__, stream_info->session_id, stream_info->composite_flag, stream_info->stats_type, stream_info->framedrop_pattern);
+			pr_err("[CAM]%s: stream_req_cmd session_id 0x%x, composite_flag 0x%x, stats_type %d, framedrop_pattern %d(%d)\n",
+				__func__, stream_req_cmd->session_id, stream_req_cmd->composite_flag, stream_req_cmd->stats_type,
+				stream_req_cmd->framedrop_pattern, framedrop_period);
+			stream_info->framedrop_period = msm_isp_get_framedrop_period(
+				stream_req_cmd->framedrop_pattern);
+		}
+#endif
 		if (rc) {
 			pr_err("%s: Stats stream param mismatch between vfe\n",
 				__func__);
+			//HTC_START
+			pr_err("%s: stream_info session_id 0x%x, composite_flag 0x%x, stats_type %d, framedrop_pattern %d\n",
+				__func__, stream_info->session_id, stream_info->composite_flag, stream_info->stats_type, stream_info->framedrop_pattern);
+			pr_err("%s: stream_req_cmd session_id 0x%x, composite_flag 0x%x, stats_type %d, framedrop_pattern %d(%d)\n",
+				__func__, stream_req_cmd->session_id, stream_req_cmd->composite_flag, stream_req_cmd->stats_type,
+				stream_req_cmd->framedrop_pattern, framedrop_period);
+			//HTC_END
+
 			return rc;
 		}
 	}

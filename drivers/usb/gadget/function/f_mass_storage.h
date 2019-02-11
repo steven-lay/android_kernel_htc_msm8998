@@ -70,6 +70,9 @@ struct fsg_opts {
 	struct fsg_common *common;
 	struct usb_function_instance func_inst;
 	struct fsg_lun_opts lun0;
+#if defined(CONFIG_HTC_USB_SENSELINK)
+	struct fsg_lun_opts lun1;
+#endif
 	struct config_group *default_groups[2];
 	bool no_configfs; /* for legacy gadgets */
 

@@ -212,4 +212,14 @@ source "drivers/bif/Kconfig"
 
 source "drivers/sensors/Kconfig"
 
+source "drivers/htc_debug/stability/Kconfig"
+
+source "drivers/htc_loglevel/Kconfig"
+
+source "drivers/htc_ril/Kconfig"
+
+source "drivers/htc_radio/Kconfig"
+
+source "drivers/gud/Kconfig"
+
 endmenu

@@ -1341,6 +1341,18 @@ int bam_pipe_init(void *base, u32 pipe,	struct bam_pipe_parameters *param,
 	SPS_DBG2(dev, "sps:%s:bam=%pa 0x%pK(va).pipe=%d.",
 			__func__, BAM_ID(dev), dev->base, pipe);
 
+	/* Check the physical addr before programming the BAM register */
+	if (param->desc_base > 0x17fffffff || param->desc_base < 0x80000000) {
+		SPS_ERR(sps, "sps:%s:bam=%pa 0x%p(va).pipe=%d desc_base:0x%lx out of range.\n",
+				__func__, BAM_ID(dev), dev->base, pipe, (unsigned long)param->desc_base);
+		return SPS_ERROR;
+	}
+	if (param->mode == BAM_PIPE_MODE_BAM2BAM && param->data_base > 0x17fffffff) {
+		SPS_ERR(sps, "sps:%s:bam=%pa 0x%p(va).pipe=%d data_base:0x%lx out of range.\n",
+				__func__, BAM_ID(dev), dev->base, pipe, (unsigned long)param->data_base);
+		return SPS_ERROR;
+	}
+
 	/* Reset the BAM pipe */
 	bam_write_reg(base, P_RST, pipe, 1);
 	/* No delay needed */

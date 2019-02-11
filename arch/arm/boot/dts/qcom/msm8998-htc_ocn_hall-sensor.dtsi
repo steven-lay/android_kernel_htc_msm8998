@@ -1,0 +1,25 @@
+&soc {
+	tlmm: pinctrl@03400000 {
+		hall_pinctrl_active: hall_pinctrl_active {
+			mux {
+				pins = "gpio117", "gpio118";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio117", "gpio118";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+	};
+
+        hall_ak8789 {
+		compatible = "hall_sensor,ak8789";
+		hall,att_used = <2>;
+		hall,att_gpio = <&tlmm 118 0>;
+		hall,att_gpio_s = <&tlmm 117 0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&hall_pinctrl_active>;
+	};
+};
+

@@ -1,0 +1,35 @@
+/* Copyright (c) 2016, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+
+/dts-v1/;
+
+#include "msm8998-v2.1.dtsi"
+#include "msm8998-htc_ocn.dtsi"
+#include "msm8998-nc-pins-htc_ocn-xd.dtsi"
+#include "msm8998-camera-sensor-ocn-xd.dtsi"
+#include "msm8998-htc_ocn-edge_xr-p3.dtsi"
+
+/ {
+	model = "HTC Corporation. MSM8998 v2.1 OCN XF";
+	qcom,msm-id = <436 0x20001>, <437 0x20001>, <438 0x20001>, <439 0x20001>, <440 0x20001>, <443 0x20001>;
+	qcom,board-id = <5 0>;
+};
+
+&pm8998_l19 {
+        regulator-min-microvolt = <2850000>;
+        regulator-max-microvolt = <2850000>;
+        qcom,init-voltage = <2850000>;
+        qcom,init-ldo-mode = <1>;
+        regulator-always-on;
+        status = "okay";
+};

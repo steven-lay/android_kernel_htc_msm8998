@@ -1180,6 +1180,31 @@ config TOUCHSCREEN_GEN_VKEYS
          To compile this driver as a module, choose M here: the
          module will be called gen_vkeys.
 
+config TOUCHSCREEN_HIMAX_ES_CAP
+	tristate "HIMAX HM852xES serious i2c touchscreen"
+	depends on I2C
+	help
+	  This enables support for HIMAX HM852xES virtual key driver over I2C based touchscreens.
+
+config TOUCHSCREEN_HIMAX_DEBUG_CAP
+	tristate "HIMAX HM852xES serious debug function"
+	depends on I2C
+	help
+	  This enables HIMAX HM852xES virtual key debug function.
+
+config TOUCHSCREEN_HIMAX_ESD_EN_CAP
+	tristate "HIMAX HM852xD ESD recovery function"
+	depends on I2C
+	help
+	  This enables support ESD recovery function for HIMAX HM852xES virtual key driver.
+
+config TOUCHSCREEN_CAPSENSOR_FW_UPDATE
+        tristate "Capsensor firmware update"
+        help
+          Say Y here to support cap firmware update
+
+          If unsure, say N.
+
 config TOUCHSCREEN_FT5X06
        tristate "FocalTech touchscreens"
        depends on I2C
@@ -1214,6 +1239,10 @@ config TOUCHSCREEN_IT7260_I2C
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called it7258_ts_i2c.
+
+source "drivers/input/touchscreen/nt36xxx/Kconfig"
+source "drivers/input/touchscreen/cyttsp5/Kconfig"
+source "drivers/input/touchscreen/synaptics_dsx_htc/Kconfig"
 
 config TOUCHSCREEN_ST
 	bool "STMicroelectronics Touchscreen Driver"

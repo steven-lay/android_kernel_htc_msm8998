@@ -994,6 +994,43 @@ config SND_SOC_MSM_HDMI_CODEC_RX
 	HDMI audio drivers should be built only if the platform
         supports hdmi panel.
 
+#HTC_AUD_START
+config SND_SOC_TAS2557
+	tristate "Texas Instruments TAS2557 SmartAmp(R)"
+
+config TAS2557_REGMAP
+	bool "Use of RegMap API"
+	depends on SND_SOC_TAS2557
+	default y
+
+config TAS2557_CODEC
+	bool "Codec Driver support"
+	depends on SND_SOC_TAS2557
+	default y
+
+config TAS2557_MISC
+	bool "Misc Driver support"
+	depends on SND_SOC_TAS2557
+	default y
+
+config SND_SOC_TAS2557_STEREO
+	tristate "Texas Instruments TAS2557 SmartAmp(R)"
+
+if SND_SOC_TAS2557_STEREO
+config TAS2557_REGMAP_STEREO
+	bool "Use of RegMap API"
+	default y
+
+config TAS2557_CODEC_STEREO
+	bool "Codec Driver support"
+	default y
+
+config TAS2557_MISC_STEREO
+	bool "Misc Driver support"
+	default y
+
+endif # SND_SOC_TAS2557_STEREO
+#HTC_AUD_END
 source "sound/soc/codecs/sdm660_cdc/Kconfig"
 source "sound/soc/codecs/msm_sdw/Kconfig"
 

@@ -7,7 +7,12 @@ obj-$(CONFIG_I2C)		+= i2c-core.o
 obj-$(CONFIG_I2C_SMBUS)		+= i2c-smbus.o
 obj-$(CONFIG_I2C_CHARDEV)	+= i2c-dev.o
 obj-$(CONFIG_I2C_MUX)		+= i2c-mux.o
-obj-y				+= algos/ busses/ muxes/
+#Only cxd224 driver in chips folder
+ifeq ($(findstring JAPAN,$(PRIVATE_SKU_NAME)),JAPAN)
+obj-y                           += algos/ busses/ muxes/ chips/
+else
+obj-y                           += algos/ busses/ muxes/
+endif
 obj-$(CONFIG_I2C_STUB)		+= i2c-stub.o
 obj-$(CONFIG_I2C_SLAVE_EEPROM)	+= i2c-slave-eeprom.o
 

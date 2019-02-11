@@ -163,6 +163,25 @@ struct fb_cursor_user {
 /*      A hardware display blank revert early change occured */
 #define FB_R_EARLY_EVENT_BLANK		0x11
 
+struct dsi_status_notifier{
+	struct list_head dsi_notifier_link;
+	const char *name;
+	void (*func)(int status);
+};
+extern int dsi_register_notifier(struct dsi_status_notifier *);
+static LIST_HEAD(g_dsi_notifier_list);
+enum {
+	LCM_EARLY_MIPI_OFF_CMD = 0,
+	LCM_MIPI_OFF_CMD,
+	LCM_EARLY_POWERDOWN,
+	LCM_POWERDOWN,
+	LCM_REST_EARLY_HIGH,
+	LCM_REST_HIGH,
+	LCM_REST_EARLY_LOW,
+	LCM_REST_LOW,
+	LCM_POWERON,
+};
+
 struct fb_event {
 	struct fb_info *info;
 	void *data;

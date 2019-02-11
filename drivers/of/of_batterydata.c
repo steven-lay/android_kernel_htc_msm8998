@@ -310,6 +310,37 @@ static int64_t of_batterydata_convert_battery_id_kohm(int batt_id_uv,
 	return resistor_value_kohm;
 }
 
+#ifdef CONFIG_HTC_BATT
+struct device_node *of_batterydata_get_best_profile(
+		const struct device_node *batterydata_container_node,
+		int batt_id_kohm, const char *batt_type)
+{
+	struct device_node *cur_node = NULL;
+	int rc = 0, id_raw_min = 0, id_raw_max = 0, htc_batt_id_ohm = 0;
+
+	htc_batt_id_ohm = batt_id_kohm*1000;
+
+	for_each_child_of_node(batterydata_container_node, cur_node) {
+		rc = of_property_read_u32(cur_node, "htc,id_raw_min", &id_raw_min);
+		if (rc)
+			pr_err("htc,id_raw_min missing in dt\n");
+
+		rc = of_property_read_u32(cur_node, "htc,id_raw_max", &id_raw_max);
+		if (rc)
+		pr_err("htc,id_raw_max missing in dt\n");
+
+		pr_info("Find batterydata path: %s, id_ohm=%d, raw_min=%d, raw_max=%d.\n",
+				cur_node->name, htc_batt_id_ohm, id_raw_min, id_raw_max);
+		if (!rc) {
+			if ((id_raw_min <= htc_batt_id_ohm) && (htc_batt_id_ohm <= id_raw_max)) {
+				return cur_node;
+			}
+		}
+	}
+	return NULL;
+}
+
+#else
 struct device_node *of_batterydata_get_best_profile(
 		const struct device_node *batterydata_container_node,
 		int batt_id_kohm, const char *batt_type)
@@ -393,6 +424,7 @@ struct device_node *of_batterydata_get_best_profile(
 
 	return best_node;
 }
+#endif
 
 int of_batterydata_read_data(struct device_node *batterydata_container_node,
 				struct bms_battery_data *batt_data,

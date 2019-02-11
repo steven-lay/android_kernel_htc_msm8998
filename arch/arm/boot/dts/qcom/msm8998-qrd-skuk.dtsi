@@ -134,14 +134,14 @@
 	};
 
 	/* GPIO 6 for Vol+ Key */
-	gpio@c500 {
+/*	gpio@c500 {
 		status = "okay";
 		qcom,mode = <0>;
 		qcom,pull = <0>;
 		qcom,vin-sel = <0>;
 		qcom,src-sel = <0>;
 		qcom,out-strength = <1>;
-	};
+	};*/
 
 	gpio@d200 { /* GPIO 19 - wil6210 refclk3_en */
 		qcom,mode = <0>;		/* Input */

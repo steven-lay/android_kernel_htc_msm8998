@@ -40,6 +40,14 @@
 #include <sound/q6audio-v2.h>
 #include <sound/audio_cal_utils.h>
 #include <sound/adsp_err.h>
+/* HTC_AUD_START */
+#include <sound/htc_acoustic_alsa.h>
+#include <soc/qcom/subsystem_restart.h>
+static int is_asm_close_failed = 0;
+#ifndef CONFIG_HTC_DEBUG_DSP
+static int asm_close_retry_count = 0;
+#endif
+/* HTC_AUD_END */
 #include <sound/compress_params.h>
 
 #define TRUE        0x01
@@ -2674,6 +2682,16 @@ static int __q6asm_open_read(struct audio_client *ac,
 				atomic_read(&ac->cmd_state)));
 		rc = adsp_err_get_lnx_err_code(
 				atomic_read(&ac->cmd_state));
+/* HTC_AUD_START */
+		if (is_asm_close_failed &&
+			(adsp_err_get_lnx_err_code(atomic_read(&ac->cmd_state)) == -EALREADY)) {
+			pr_err("%s: is_asm_close_failed and %s, restart adsp\n", __func__,
+					adsp_err_get_err_str(atomic_read(&ac->cmd_state)));
+			is_asm_close_failed = 0;
+			subsystem_restart("adsp");
+		}
+
+/* HTC_AUD_END */
 		goto fail_cmd;
 	}
 
@@ -2895,6 +2913,12 @@ static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
 	if (ac->perf_mode != LEGACY_PCM_MODE)
 		open.postprocopo_id = ASM_STREAM_POSTPROCOPO_ID_NONE;
 
+/* HTC_AUD_START */
+	if ((ac->io_mode & COMPRESSED_IO) || (ac->io_mode & COMPRESSED_STREAM_IO)) {
+		open.postprocopo_id = ac->topology;
+	}
+/* HTC_AUD_END */
+
 	pr_debug("%s: perf_mode %d asm_topology 0x%x bps %d\n", __func__,
 		 ac->perf_mode, open.postprocopo_id, open.bits_per_sample);
 
@@ -2972,6 +2996,11 @@ static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
 	if (!rc) {
 		pr_err("%s: timeout. waited for open write\n", __func__);
 		rc = -ETIMEDOUT;
+/* HTC_AUD_START */
+#ifdef CONFIG_HTC_DEBUG_DSP
+		BUG();
+#endif
+/* HTC_AUD_END */
 		goto fail_cmd;
 	}
 	if (atomic_read(&ac->cmd_state) > 0) {
@@ -2980,6 +3009,15 @@ static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
 				atomic_read(&ac->cmd_state)));
 		rc = adsp_err_get_lnx_err_code(
 				atomic_read(&ac->cmd_state));
+/* HTC_AUD_START */
+		if (is_asm_close_failed &&
+			(adsp_err_get_lnx_err_code(atomic_read(&ac->cmd_state)) == -EALREADY)) {
+			pr_err("%s: is_asm_close_failed and %s, restart adsp\n", __func__,
+					adsp_err_get_err_str(atomic_read(&ac->cmd_state)));
+			is_asm_close_failed = 0;
+			subsystem_restart("adsp");
+		}
+/* HTC_AUD_END */
 		goto fail_cmd;
 	}
 	ac->io_mode |= TUN_WRITE_IO_MODE;
@@ -8545,6 +8583,28 @@ fail_send_param:
 	return rc;
 }
 
+/* HTC_AUD_START - HTC Effect {HPKB:2082}*/
+int htc_set_asm_effect(void* payload, int total_size, int topology, bool hd_support)
+{
+	int n;
+	for (n = 1; n <= ASM_ACTIVE_STREAMS_ALLOWED; n++) {
+		if (session[n].ac && ((session[n].ac->io_mode & COMPRESSED_STREAM_IO))) {
+			if (session[n].ac->topology == topology) {
+				q6asm_send_audio_effects_params(session[n].ac, payload,
+					total_size);
+				return 0;
+			} else if ((session[n].ac->topology == HTC_POPP_HD_TOPOLOGY)
+				&& hd_support) {
+				q6asm_send_audio_effects_params(session[n].ac, payload,
+					total_size);
+				return 0;
+			}
+		}
+	}
+	return -EINVAL;
+}
+/* HTC_AUD_END */
+
 int q6asm_send_mtmx_strtr_window(struct audio_client *ac,
 		struct asm_session_mtmx_strtr_param_window_v2_t *window_param,
 		uint32_t param_id)
@@ -8939,12 +8999,25 @@ static int __q6asm_cmd(struct audio_client *ac, int cmd, uint32_t stream_id)
 		pr_err("%s: Commmand 0x%x failed %d\n",
 				__func__, hdr.opcode, rc);
 		rc = -EINVAL;
+/* HTC_AUD_START */
+		if (hdr.opcode == ASM_STREAM_CMD_CLOSE)
+			is_asm_close_failed = 1;
+/* HTC_AUD_END */
 		goto fail_cmd;
 	}
 	rc = wait_event_timeout(ac->cmd_wait, (atomic_read(state) >= 0), 5*HZ);
 	if (!rc) {
 		pr_err("%s: timeout. waited for response opcode[0x%x]\n",
 				__func__, hdr.opcode);
+/* HTC_AUD_START */
+		if (asm_close_retry_count < 4) {
+			pr_err("%s: Trigger SSR to recovery ASM invalid state\n",
+					__func__);
+			subsystem_restart("adsp");
+			asm_close_retry_count++;
+		} else
+			BUG();
+/* HTC_AUD_END */
 		rc = -ETIMEDOUT;
 		goto fail_cmd;
 	}
@@ -8979,6 +9052,11 @@ static int __q6asm_cmd(struct audio_client *ac, int cmd, uint32_t stream_id)
 			}
 		}
 	}
+/* HTC_AUD_START */
+#ifndef CONFIG_HTC_DEBUG_DSP
+	asm_close_retry_count = 0;
+#endif
+/* HTC_AUD_END */
 	return 0;
 fail_cmd:
 	return rc;

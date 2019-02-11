@@ -215,6 +215,7 @@
 #include <linux/freezer.h>
 #include <linux/module.h>
 #include <linux/uaccess.h>
+#include <linux/switch.h>
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
@@ -229,6 +230,8 @@
 
 #define FSG_DRIVER_DESC		"Mass Storage Function"
 #define FSG_DRIVER_VERSION	"2009/09/11"
+#define FSG_VENDOR_NAME		"HTC"
+#define FSG_PRODUCT_NAME	"Android Phone"
 
 static const char fsg_string_interface[] = "Mass Storage";
 
@@ -251,7 +254,13 @@ static struct usb_gadget_strings *fsg_strings_array[] = {
 	NULL,
 };
 
+static struct switch_dev scsi_switch = {
+	.name = "scsi_cmd",
+};
+
 /*-------------------------------------------------------------------------*/
+
+static int scsi_adb_state;
 
 struct fsg_dev;
 struct fsg_common;
@@ -647,12 +656,18 @@ static int sleep_thread(struct fsg_common *common, bool can_freeze)
 			rc = -EINTR;
 			break;
 		}
-		if (common->thread_wakeup_needed)
+		spin_lock_irq(&common->lock);
+		if (common->thread_wakeup_needed) {
+			spin_unlock_irq(&common->lock);
 			break;
+		}
+		spin_unlock_irq(&common->lock);
 		schedule();
 	}
 	__set_current_state(TASK_RUNNING);
+	spin_lock_irq(&common->lock);
 	common->thread_wakeup_needed = 0;
+	spin_unlock_irq(&common->lock);
 
 	/*
 	 * Ensure the writing of thread_wakeup_needed
@@ -662,6 +677,108 @@ static int sleep_thread(struct fsg_common *common, bool can_freeze)
 	return rc;
 }
 
+static void _lba_to_msf(u8 *buf, int lba)
+{
+	lba += 150;
+	buf[0] = (lba / 75) / 60;
+	buf[1] = (lba / 75) % 60;
+	buf[2] = lba % 75;
+}
+
+static int _read_toc_raw(struct fsg_common *common, struct fsg_buffhd *bh)
+{
+	struct fsg_lun  *curlun = common->curlun;
+	int             msf = common->cmnd[1] & 0x02;
+	u8              *buf = (u8 *) bh->buf;
+	u8              *q;
+	int             len;
+
+	q = buf + 2;
+	memset(q, 0, 46);
+	*q++ = 1; /* first session */
+	*q++ = 1; /* last session */
+
+	*q++ = 1; /* session number */
+	*q++ = 0x14; /* data track */
+	*q++ = 0; /* track number */
+	*q++ = 0xa0; /* lead-in */
+	*q++ = 0; /* min */
+	*q++ = 0; /* sec */
+	*q++ = 0; /* frame */
+	*q++ = 0;
+	*q++ = 1; /* first track */
+	*q++ = 0x00; /* disk type */
+	*q++ = 0x00;
+
+	*q++ = 1; /* session number */
+	*q++ = 0x14; /* data track */
+	*q++ = 0; /* track number */
+	*q++ = 0xa1;
+	*q++ = 0; /* min */
+	*q++ = 0; /* sec */
+	*q++ = 0; /* frame */
+	*q++ = 0;
+	*q++ = 1; /* last track */
+	*q++ = 0x00;
+	*q++ = 0x00;
+
+	*q++ = 1; /* session number */
+	*q++ = 0x14; /* data track */
+	*q++ = 0; /* track number */
+	*q++ = 0xa2; /* lead-out */
+	*q++ = 0; /* min */
+	*q++ = 0; /* sec */
+	*q++ = 0; /* frame */
+	if (msf) {
+		*q++ = 0; /* reserved */
+		_lba_to_msf(q, curlun->num_sectors);
+		q += 3;
+	} else {
+		put_unaligned_be32(curlun->num_sectors, q);
+		q += 4;
+	}
+
+	*q++ = 1; /* session number */
+	*q++ = 0x14; /* ADR, control */
+	*q++ = 0; /* track number */
+	*q++ = 1; /* point */
+	*q++ = 0; /* min */
+	*q++ = 0; /* sec */
+	*q++ = 0; /* frame */
+	if (msf) {
+		*q++ = 0;
+		_lba_to_msf(q, 0);
+		q += 3;
+	} else {
+		memset(q, 0, 4);
+		q += 4;
+	}
+
+	len = q - buf;
+	put_unaligned_be16(len - 2, buf);
+
+	return len;
+}
+
+static void cd_data_to_raw(u8 *buf, int lba)
+{
+	/* sync bytes */
+	buf[0] = 0x00;
+	memset(buf + 1, 0xff, 10);
+	buf[11] = 0x00;
+	buf += 12;
+
+	/* MSF */
+	_lba_to_msf(buf, lba);
+	buf[3] = 0x01; /* mode 1 data */
+	buf += 4;
+
+	/* data */
+	buf += 2048;
+
+	/* XXX: ECC not computed */
+	memset(buf, 0, 288);
+}
 
 /*-------------------------------------------------------------------------*/
 
@@ -675,12 +792,23 @@ static int do_read(struct fsg_common *common)
 	loff_t			file_offset, file_offset_tmp;
 	unsigned int		amount;
 	ssize_t			nread;
+	u32                     transfer_request;
+
+	if (common->cmnd[0] == READ_CD) {
+		if (common->data_size_from_cmnd == 0)
+			return 0;
+		transfer_request = common->cmnd[9];
+	} else
+		transfer_request = 0;
+
 
 	/*
 	 * Get the starting Logical Block Address and check that it's
 	 * not too big.
 	 */
-	if (common->cmnd[0] == READ_6)
+	if (common->cmnd[0] == READ_CD)
+		lba = get_unaligned_be32(&common->cmnd[2]);
+	else if (common->cmnd[0] == READ_6)
 		lba = get_unaligned_be24(&common->cmnd[1]);
 	else {
 		lba = get_unaligned_be32(&common->cmnd[2]);
@@ -699,10 +827,18 @@ static int do_read(struct fsg_common *common)
 		curlun->sense_data = SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
 		return -EINVAL;
 	}
+
+	if ((transfer_request & 0xf8) == 0xf8) {
+		file_offset = ((loff_t) lba) << 11;
+
+		/* read all data, 2352 byte */
+		amount_left = 2352;
+	} else {
 	file_offset = ((loff_t) lba) << curlun->blkbits;
 
 	/* Carry out the file reads */
 	amount_left = common->data_size_from_cmnd;
+	}
 	if (unlikely(amount_left == 0))
 		return -EIO;		/* No default reply */
 
@@ -718,12 +854,17 @@ static int do_read(struct fsg_common *common)
 			     curlun->file_length - file_offset);
 
 		/* Wait for the next buffer to become available */
+		spin_lock_irq(&common->lock);
 		bh = common->next_buffhd_to_fill;
 		while (bh->state != BUF_STATE_EMPTY) {
+			spin_unlock_irq(&common->lock);
 			rc = sleep_thread(common, false);
 			if (rc)
 				return rc;
+
+			spin_lock_irq(&common->lock);
 		}
+		spin_unlock_irq(&common->lock);
 
 		/*
 		 * If we were asked to read past the end of file,
@@ -735,16 +876,24 @@ static int do_read(struct fsg_common *common)
 			curlun->sense_data_info =
 					file_offset >> curlun->blkbits;
 			curlun->info_valid = 1;
+			spin_lock_irq(&common->lock);
 			bh->inreq->length = 0;
 			bh->state = BUF_STATE_FULL;
+			spin_unlock_irq(&common->lock);
 			break;
 		}
 
 		/* Perform the read */
 		file_offset_tmp = file_offset;
-		nread = vfs_read(curlun->filp,
-				 (char __user *)bh->buf,
-				 amount, &file_offset_tmp);
+		if ((transfer_request & 0xf8) == 0xf8)
+			nread = vfs_read(curlun->filp,
+					((char __user *)bh->buf) + 16,
+					amount, &file_offset_tmp);
+		else
+			nread = vfs_read(curlun->filp,
+					(char __user *)bh->buf,
+					amount, &file_offset_tmp);
+
 		VLDBG(curlun, "file read %u @ %llu -> %d\n", amount,
 		      (unsigned long long)file_offset, (int)nread);
 		if (signal_pending(current))
@@ -767,8 +916,10 @@ static int do_read(struct fsg_common *common)
 		 * equal to the buffer size, which is divisible by the
 		 * bulk-in maxpacket size.
 		 */
+		spin_lock_irq(&common->lock);
 		bh->inreq->length = nread;
 		bh->state = BUF_STATE_FULL;
+		spin_unlock_irq(&common->lock);
 
 		/* If an error occurred, report it and its position */
 		if (nread < amount) {
@@ -789,6 +940,9 @@ static int do_read(struct fsg_common *common)
 			return -EIO;
 		common->next_buffhd_to_fill = bh->next;
 	}
+
+	if ((transfer_request & 0xf8) == 0xf8)
+		cd_data_to_raw(bh->buf, lba);
 
 	return -EIO;		/* No default reply */
 }
@@ -1238,6 +1392,7 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 	struct fsg_lun	*curlun = common->curlun;
 	int		msf = common->cmnd[1] & 0x02;
 	int		start_track = common->cmnd[6];
+	int             format = (common->cmnd[9] & 0xC0) >> 6;
 	u8		*buf = (u8 *)bh->buf;
 
 	if ((common->cmnd[1] & ~0x02) != 0 ||	/* Mask away MSF */
@@ -1245,6 +1400,9 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 		curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
 		return -EINVAL;
 	}
+
+	if (format == 2)
+		return _read_toc_raw(common, bh);
 
 	memset(buf, 0, 20);
 	buf[1] = (20-2);		/* TOC data length */
@@ -1314,7 +1472,7 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
 		memset(buf+2, 0, 10);	/* None of the fields are changeable */
 
 		if (!changeable_values) {
-			buf[2] = 0x04;	/* Write cache enable, */
+			buf[2] = 0x00;	/* Write cache enable, */
 					/* Read cache not disabled */
 					/* No cache retention priorities */
 			put_unaligned_be16(0xffff, &buf[4]);
@@ -1447,6 +1605,44 @@ static int do_mode_select(struct fsg_common *common, struct fsg_buffhd *bh)
 	return -EINVAL;
 }
 
+struct work_struct	ums_adb_state_change_work;
+char *switch_adb_off_state[3] = { "SWITCH_NAME=scsi_cmd", "SWITCH_STATE=0", NULL };
+char *switch_adb_on_state[3] = { "SWITCH_NAME=scsi_cmd", "SWITCH_STATE=1", NULL };
+
+static void handle_reserve_cmd_scsi(struct work_struct *work)
+{
+	printk(KERN_NOTICE "[USB] %s: scsi_adb_state=%d\n", __func__, scsi_adb_state);
+	kobject_uevent_env(&scsi_switch.dev->kobj, KOBJ_CHANGE,
+		(scsi_adb_state == 1) ? switch_adb_on_state:switch_adb_off_state );
+}
+
+static int do_reserve(struct fsg_common *common, struct fsg_buffhd *bh)
+{
+	if (common->curlun == common->luns[1])
+		return 0;
+
+	if (common->cmnd[1] == ('h'&0x1f) && common->cmnd[2] == 't'
+			&& common->cmnd[3] == 'c') {
+		/* No special options */
+		switch (common->cmnd[5]) {
+			case 0x01: /* enable adbd */
+				printk(KERN_NOTICE "[USB] Enable adb daemon from mass_storage\n");
+				scsi_adb_state = 1;
+				schedule_work(&ums_adb_state_change_work);
+				break;
+			case 0x02: /*disable adbd */
+				printk(KERN_NOTICE "[USB] Disable adb daemon from mass_storage\n");
+				scsi_adb_state = 0;
+				schedule_work(&ums_adb_state_change_work);
+				break;
+			default:
+				printk(KERN_DEBUG "Unknown hTC specific command..."
+						"(0x%2.2X)\n", common->cmnd[5]);
+				break;
+		}
+	}
+	return 0;
+}
 
 /*-------------------------------------------------------------------------*/
 
@@ -1661,12 +1857,17 @@ static int send_status(struct fsg_common *common)
 	u32			sd, sdinfo = 0;
 
 	/* Wait for the next buffer to become available */
+	spin_lock_irq(&common->lock);
 	bh = common->next_buffhd_to_fill;
 	while (bh->state != BUF_STATE_EMPTY) {
+		spin_unlock_irq(&common->lock);
 		rc = sleep_thread(common, true);
 		if (rc)
 			return rc;
+
+		spin_lock_irq(&common->lock);
 	}
+	spin_unlock_irq(&common->lock);
 
 	if (curlun) {
 		sd = curlun->sense_data;
@@ -1776,6 +1977,8 @@ static int check_command(struct fsg_common *common, int cmnd_size,
 			    "but we got %d\n", name,
 			    cmnd_size, common->cmnd_size);
 			cmnd_size = common->cmnd_size;
+		} else if (common->cmnd[0] == RESERVE){
+			cmnd_size = common->cmnd_size;
 		} else {
 			common->phase_error = 1;
 			return -EINVAL;
@@ -1863,13 +2066,19 @@ static int do_scsi_command(struct fsg_common *common)
 	dump_cdb(common);
 
 	/* Wait for the next buffer to become available for data or status */
+	spin_lock_irq(&common->lock);
 	bh = common->next_buffhd_to_fill;
 	common->next_buffhd_to_drain = bh;
 	while (bh->state != BUF_STATE_EMPTY) {
+		spin_unlock_irq(&common->lock);
 		rc = sleep_thread(common, true);
 		if (rc)
 			return rc;
+
+		spin_lock_irq(&common->lock);
 	}
+	spin_unlock_irq(&common->lock);
+
 	common->phase_error = 0;
 	common->short_packet_received = 0;
 
@@ -1965,6 +2174,16 @@ static int do_scsi_command(struct fsg_common *common)
 			reply = do_read(common);
 		break;
 
+	case READ_CD:
+		common->data_size_from_cmnd = ((common->cmnd[6] << 16) |
+				(common->cmnd[7] << 8) | (common->cmnd[8])) << 9;
+		reply = check_command(common, 12, DATA_DIR_TO_HOST,
+				(0xf<<2) | (7<<7), 1, "READ CD");
+
+		if (reply == 0)
+			reply = do_read(common);
+		break;
+
 	case READ_CAPACITY:
 		common->data_size_from_cmnd = 8;
 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
@@ -1992,7 +2211,7 @@ static int do_scsi_command(struct fsg_common *common)
 		common->data_size_from_cmnd =
 			get_unaligned_be16(&common->cmnd[7]);
 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
-				      (7<<6) | (1<<1), 1,
+				      (0xf<<6) | (1<<1), 1,
 				      "READ TOC");
 		if (reply == 0)
 			reply = do_read_toc(common, bh);
@@ -2088,6 +2307,15 @@ static int do_scsi_command(struct fsg_common *common)
 			reply = do_write(common);
 		break;
 
+	case RESERVE:
+		common->data_size_from_cmnd = 0;
+		reply = check_command(common, 10, DATA_DIR_TO_HOST,
+				      (1<<1) | (0xf<<2) , 0,
+				      "RESERVE(6)");
+		if (reply == 0)
+			reply = do_reserve(common, bh);
+		break;
+
 	/*
 	 * Some mandatory commands that we recognize but don't implement.
 	 * They don't mean much in this setting.  It's left as an exercise
@@ -2096,7 +2324,6 @@ static int do_scsi_command(struct fsg_common *common)
 	 */
 	case FORMAT_UNIT:
 	case RELEASE:
-	case RESERVE:
 	case SEND_DIAGNOSTIC:
 		/* Fall through */
 
@@ -2211,12 +2438,17 @@ static int get_next_command(struct fsg_common *common)
 	int			rc = 0;
 
 	/* Wait for the next buffer to become available */
+	spin_lock_irq(&common->lock);
 	bh = common->next_buffhd_to_fill;
 	while (bh->state != BUF_STATE_EMPTY) {
+		spin_unlock_irq(&common->lock);
 		rc = sleep_thread(common, true);
 		if (rc)
 			return rc;
+
+		spin_lock_irq(&common->lock);
 	}
+	spin_unlock_irq(&common->lock);
 
 	/* Queue a request to read a Bulk-only CBW */
 	set_bulk_out_req_length(common, bh, US_BULK_CB_WRAP_LEN);
@@ -2231,14 +2463,23 @@ static int get_next_command(struct fsg_common *common)
 	 */
 
 	/* Wait for the CBW to arrive */
+	spin_lock_irq(&common->lock);
 	while (bh->state != BUF_STATE_FULL) {
+		spin_unlock_irq(&common->lock);
 		rc = sleep_thread(common, true);
 		if (rc)
 			return rc;
+
+		spin_lock_irq(&common->lock);
 	}
+	spin_unlock_irq(&common->lock);
+
 	smp_rmb();
 	rc = fsg_is_set(common) ? received_cbw(common->fsg, bh) : -EIO;
+
+	spin_lock_irq(&common->lock);
 	bh->state = BUF_STATE_EMPTY;
+	spin_unlock_irq(&common->lock);
 
 	return rc;
 }
@@ -2414,10 +2655,13 @@ static void handle_exception(struct fsg_common *common)
 		/* Wait until everything is idle */
 		for (;;) {
 			int num_active = 0;
+			spin_lock_irq(&common->lock);
 			for (i = 0; i < common->fsg_num_buffers; ++i) {
 				bh = &common->buffhds[i];
 				num_active += bh->inreq_busy + bh->outreq_busy;
 			}
+			spin_unlock_irq(&common->lock);
+
 			if (num_active == 0)
 				break;
 			if (sleep_thread(common, true))
@@ -3064,7 +3308,7 @@ static int fsg_bind(struct usb_configuration *c, struct usb_function *f)
 					  fsg->common->can_stall);
 		if (ret)
 			return ret;
-		fsg_common_set_inquiry_string(fsg->common, NULL, NULL);
+		fsg_common_set_inquiry_string(fsg->common, FSG_VENDOR_NAME, FSG_PRODUCT_NAME);
 	}
 
 	if (!common->thread_task) {
@@ -3505,6 +3749,9 @@ static struct usb_function_instance *fsg_alloc_inst(void)
 
 	memset(&config, 0, sizeof(config));
 	config.removable = true;
+	config.cdrom = 1;
+	config.ro = 1;
+
 	rc = fsg_common_create_lun(opts->common, &config, 0, "lun.0",
 			(const char **)&opts->func_inst.group.cg_item.ci_name);
 	if (rc)
@@ -3516,7 +3763,26 @@ static struct usb_function_instance *fsg_alloc_inst(void)
 	opts->default_groups[0] = &opts->lun0.group;
 	opts->func_inst.group.default_groups = opts->default_groups;
 
+#if defined(CONFIG_HTC_USB_SENSELINK)
+	rc = fsg_common_create_lun(opts->common, &config, 1, "lun.1",
+			(const char **)&opts->func_inst.group.cg_item.ci_name);
+	if (rc)
+		goto release_buffers;
+
+	opts->lun1.lun = opts->common->luns[1];
+	opts->lun1.lun_id = 1;
+	config_group_init_type_name(&opts->lun1.group, "lun.1", &fsg_lun_type);
+	opts->default_groups[1] = &opts->lun1.group;
+	opts->func_inst.group.default_groups = opts->default_groups;
+#endif
+
 	config_group_init_type_name(&opts->func_inst.group, "", &fsg_func_type);
+
+	INIT_WORK(&ums_adb_state_change_work, handle_reserve_cmd_scsi);
+
+	rc = switch_dev_register(&scsi_switch);
+	if (rc < 0)
+		pr_err("[USB]fail to register scsi_command switch!\n");
 
 	return &opts->func_inst;
 

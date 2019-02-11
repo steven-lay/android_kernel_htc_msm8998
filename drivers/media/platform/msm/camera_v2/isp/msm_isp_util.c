@@ -916,7 +916,7 @@ static long msm_isp_ioctl_unlocked(struct v4l2_subdev *sd,
 			if (!rc && rc2)
 				rc = rc2;
 		} else {
-			pr_err_ratelimited("%s: no HW reset, halt enforced.\n",
+			pr_err("%s: no HW reset, halt enforced.\n",
 				__func__);
 		}
 		MSM_ISP_DUAL_VFE_MUTEX_UNLOCK(vfe_dev);
@@ -933,7 +933,7 @@ static long msm_isp_ioctl_unlocked(struct v4l2_subdev *sd,
 			if (!rc && rc2)
 				rc = rc2;
 		} else {
-			pr_err_ratelimited("%s: no AXI restart, halt enforced.\n",
+			pr_err("%s: no AXI restart, halt enforced.\n",
 				__func__);
 		}
 		mutex_unlock(&vfe_dev->buf_mgr->lock);
@@ -2248,8 +2248,8 @@ static void msm_vfe_iommu_fault_handler(struct iommu_domain *domain,
 				__func__, iova);
 			msm_isp_process_iommu_page_fault(vfe_dev);
 		} else {
-			pr_err("%s: no handling, vfe open cnt = %d\n",
-				__func__, vfe_dev->vfe_open_cnt);
+			pr_err("%s: no handling, vfe open cnt = %d, overflow_state = %d\n",
+				__func__, vfe_dev->vfe_open_cnt, atomic_read(&vfe_dev->error_info.overflow_state));
 		}
 		mutex_unlock(&vfe_dev->core_mutex);
 	} else {

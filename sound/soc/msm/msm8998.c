@@ -41,8 +41,11 @@
 #include "../codecs/wcd934x/wcd934x-mbhc.h"
 #include "../codecs/wsa881x.h"
 
-#define DRV_NAME "msm8998-asoc-snd"
+/* HTC_AUD_START - AS HS 2.0 */
+#include "../codecs/htc-mbhc-headset.h"
+/* HTC_AUD_END */
 
+#define DRV_NAME "msm8998-asoc-snd"
 #define __CHIPSET__ "MSM8998 "
 #define MSM_DAILINK_NAME(name) (__CHIPSET__#name)
 
@@ -372,14 +375,14 @@ static struct dev_config mi2s_rx_cfg[] = {
 	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
 	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
 	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
+	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S24_LE, 2}, /* HTC_AUDIO */
 };
 
 static struct dev_config mi2s_tx_cfg[] = {
 	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
+	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S24_LE, 1}, /* HTC_AUDIO */
 };
 
 static struct dev_config aux_pcm_rx_cfg[] = {
@@ -439,7 +442,14 @@ static char const *mi2s_rate_text[] = {"KHZ_8", "KHZ_16",
 static const char *const mi2s_ch_text[] = {"One", "Two", "Three", "Four",
 					   "Five", "Six", "Seven",
 					   "Eight"};
+static const char *const mi2s_format_text[] = {"S16_LE", "S24_LE"}; /* HTC_AUD - Add QUAT_MI2S_RX Format control */
 static const char *const hifi_text[] = {"Off", "On"};
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+static const char *const htc_as20_vol_index_text[] = {"None", "Zero", "One", "Two", "Three", "Four",
+						"Five", "Six", "Seven", "Eight", "Nine",
+						"Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen"};
+static int htc_as_offset = 0;
+/* HTC_AUD_END - AS HS {HPKB:7329} */
 
 static SOC_ENUM_SINGLE_EXT_DECL(slim_0_rx_chs, slim_rx_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(slim_2_rx_chs, slim_rx_ch_text);
@@ -502,6 +512,7 @@ static SOC_ENUM_SINGLE_EXT_DECL(quat_mi2s_tx_chs, mi2s_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(mi2s_rx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(mi2s_tx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(hifi_function, hifi_text);
+static SOC_ENUM_SINGLE_EXT_DECL(htc_as20_vol_index, htc_as20_vol_index_text); /* HTC_AUD - AS HS {HPKB:7329} */
 
 static struct platform_device *spdev;
 static int msm_hifi_control;
@@ -600,9 +611,267 @@ static struct afe_clk_set mi2s_clk[MI2S_MAX] = {
 	}
 };
 
+static struct afe_clk_set mi2s_mclk[MI2S_MAX] = {
+	{
+		AFE_API_VERSION_I2S_CONFIG,
+		Q6AFE_LPASS_CLK_ID_MCLK_1,
+		Q6AFE_LPASS_OSR_CLK_12_P288_MHZ,
+		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
+		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
+		0,
+	},
+	{
+		AFE_API_VERSION_I2S_CONFIG,
+		Q6AFE_LPASS_CLK_ID_MCLK_2,
+		Q6AFE_LPASS_OSR_CLK_12_P288_MHZ,
+		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
+		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
+		0,
+	},
+	{
+		AFE_API_VERSION_I2S_CONFIG,
+		Q6AFE_LPASS_CLK_ID_MCLK_3,
+		Q6AFE_LPASS_OSR_CLK_12_P288_MHZ,
+		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
+		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
+		0,
+	},
+	{
+		AFE_API_VERSION_I2S_CONFIG,
+		Q6AFE_LPASS_CLK_ID_MCLK_1,
+		Q6AFE_LPASS_OSR_CLK_12_P288_MHZ,
+		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
+		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
+		0,
+	}
+};
+
 static struct mi2s_aux_pcm_common_conf mi2s_auxpcm_conf[PCM_I2S_SEL_MAX];
 static struct mi2s_conf mi2s_intf_conf[MI2S_MAX];
 static struct auxpcm_conf auxpcm_intf_conf[AUX_PCM_MAX];
+
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+static struct mutex htc_adaptivesound_enable_mutex;
+int htc_adaptivesound_enable = 0;
+int htc_as20_volume_index = 0;
+/* HTC_AUD_END - AS HS {HPKB:7329} */
+
+/* HTC_AUD_START - HTC Effect {HPKB:2082}*/
+struct htc_effect_payload {
+	uint32_t payload_size;
+	void *payload;
+};
+
+static struct htc_effect_payload * htc_payload = NULL;
+
+static struct snd_kcontrol_new *htc_audio_controls;
+
+int htc_get_port_by_mask(int* port_mask) {
+
+	int port_id = 0;
+
+	if ((*port_mask) & SPK_MASK) {
+		port_id = AFE_PORT_ID_QUATERNARY_MI2S_RX;
+		(*port_mask) &= (~SPK_MASK);
+
+	} else if ((*port_mask) & HEADSET_MASK) {
+		port_id = AFE_PORT_ID_SLIMBUS_MULTI_CHAN_6_RX;
+		(*port_mask) &= (~HEADSET_MASK);
+
+	} else if ((*port_mask) & HEADSET441MASK) {
+		port_id = AFE_PORT_ID_SLIMBUS_MULTI_CHAN_5_RX;
+		(*port_mask) &= (~HEADSET441MASK);
+
+	} else if ((*port_mask) & MAIN_MIC_MASK) {
+		port_id = SLIMBUS_0_TX;
+		(*port_mask) &= (~MAIN_MIC_MASK);
+
+	}
+
+	return port_id;
+}
+
+static int htc_switch_get(struct snd_kcontrol *kcontrol,
+			     struct snd_ctl_elem_value *ucontrol)
+{
+	int index = kcontrol->private_value;
+	unsigned int value = 0;
+	int *payload = NULL;
+
+	payload = (int *)htc_payload[index].payload;
+	if (payload)
+		value = *(payload+3);
+
+	ucontrol->value.integer.value[0] = value;
+	return 0;
+}
+
+static int htc_switch_put(struct snd_kcontrol *kcontrol,
+			     struct snd_ctl_elem_value *ucontrol)
+{
+	int index = kcontrol->private_value;
+	unsigned int enable_flag = 0;
+	int *payload = NULL;
+	bool hd_support = false;
+	int port_id = 0;
+	int ret = 0;
+	int mask = htc_effects_array[index].port_mask;
+
+	enable_flag = ucontrol->value.integer.value[0];
+
+	if (enable_flag < 0 || enable_flag > 255)
+		return -EINVAL;
+
+	payload = (int *)htc_payload[index].payload;
+	if (payload)
+		*(payload+3) = enable_flag;
+
+	if (htc_effects_array[index].flag_mask & HD_SUPPORT)
+		hd_support = true;
+
+	if (htc_effects_array[index].flag_mask & POPP_EFFECT) {
+	/* POPP effect */
+		ret = htc_set_asm_effect(payload,
+			htc_payload[index].payload_size,
+			htc_effects_array[index].topology_id,
+			hd_support);
+	} else if (htc_effects_array[index].flag_mask & COPP_EFFECT) {
+	/* COPP effect */
+		while ((port_id = htc_get_port_by_mask(&mask))) {
+			ret &= htc_set_adm_effect(htc_payload[index].payload,
+					htc_payload[index].payload_size,
+					htc_effects_array[index].topology_id,
+					hd_support,
+					port_id);
+		}
+	}
+
+	pr_info("%s: htc_effect: index %d enable %d ret %d\n", __func__, index, enable_flag, ret);
+
+	return 0;
+}
+
+static int htc_switch_info(struct snd_kcontrol *kcontrol,
+		       struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	uinfo->count = 1;
+	uinfo->value.integer.min = 0;
+	uinfo->value.integer.max = 255;
+	return 0;
+}
+
+static int htc_create_controls(struct snd_soc_codec *codec)
+{
+	int total = ARRAY_SIZE(htc_effects_array);
+	int index = 0;
+	int as30_idx = 0;
+	int *payload_value = NULL;
+
+	htc_audio_controls = kzalloc(sizeof(*htc_audio_controls)*total, GFP_KERNEL);
+	if (!htc_audio_controls) {
+		pr_err("%s, alloc htc control failed", __func__);
+		return -ENOMEM;
+	}
+
+	htc_payload  = kzalloc(sizeof(*htc_payload)*total, GFP_KERNEL);
+	if (!htc_payload) {
+		pr_err("%s, alloc payload array failed", __func__);
+		return -ENOMEM;
+	}
+
+	for (index = 0 ; index < total; index++) {
+		htc_audio_controls[index].name = htc_effects_array[index].effect_name;
+		htc_audio_controls[index].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+		htc_audio_controls[index].private_value = index;
+
+		if ((htc_effects_array[index].flag_mask & SWITCH_CTL)
+			|| (htc_effects_array[index].flag_mask & PARAM_CTL)) {
+			/* initial related effect paylod */
+			htc_payload[index].payload_size = 4*sizeof(uint32_t);
+			htc_payload[index].payload = kzalloc(htc_payload[index].payload_size, GFP_KERNEL);
+			if (!htc_payload[index].payload) {
+				pr_err("%s, alloc payload %d failed", __func__, index);
+				return -ENOMEM;
+			}
+
+			payload_value = (int *)htc_payload[index].payload;
+			*payload_value++ = htc_effects_array[index].module_id;
+			*payload_value++ = htc_effects_array[index].param_id;
+			*payload_value++ = sizeof(uint32_t);
+			*payload_value = 0;
+
+			/* initial related effect control */
+			htc_audio_controls[index].info = htc_switch_info;
+			htc_audio_controls[index].get = htc_switch_get;
+			htc_audio_controls[index].put = htc_switch_put;
+
+		} else if (htc_effects_array[index].flag_mask & AaptiveSound) { /* HTC_AUD - AS HS {HPKB:7329}*/
+			/* initial related AS3.0 effect payload */
+			htc_payload[index].payload_size = (3+256)*sizeof(uint32_t);
+			htc_payload[index].payload = kzalloc(htc_payload[index].payload_size, GFP_KERNEL);
+			if (!htc_payload[index].payload) {
+				pr_err("%s, alloc payload %d failed", __func__, index);
+				return -ENOMEM;
+			}
+
+			/* restore for AS3.0 payload index */
+			if (as30_idx == 0) {
+				htc_as_offset = index;
+				as30_idx = 1;
+			}
+
+			htc_audio_controls[index].info = htc_switch_info;
+		}
+	}
+
+	return snd_soc_add_codec_controls(codec, htc_audio_controls,
+					 total);
+}
+
+void htc_effect_by_adm_open(int port_id, int topology) {
+	int mask_flag = 0;
+	bool hd_flag = false;
+	int index = 0;
+
+	switch (port_id) {
+	case AFE_PORT_ID_QUATERNARY_MI2S_RX:
+		mask_flag = SPK_MASK;
+		break;
+	case AFE_PORT_ID_SLIMBUS_MULTI_CHAN_6_RX:
+		mask_flag |= HEADSET_MASK;
+		break;
+	case AFE_PORT_ID_SLIMBUS_MULTI_CHAN_5_RX:
+		mask_flag |= HEADSET441MASK;
+		break;
+	case SLIMBUS_0_TX:
+		mask_flag |= MAIN_MIC_MASK;
+	default:
+		mask_flag = 0;
+		break;
+	}
+
+	for (index = 0; index < ARRAY_SIZE(htc_effects_array); index++) {
+		if (htc_effects_array[index].flag_mask & HD_SUPPORT)
+			hd_flag = true;
+
+		if (htc_effects_array[index].flag_mask & POPP_EFFECT) {
+			htc_set_asm_effect(htc_payload[index].payload,
+				htc_payload[index].payload_size,
+				htc_effects_array[index].topology_id,
+				hd_flag);
+		} else if (htc_effects_array[index].flag_mask & COPP_EFFECT) {
+				if ((htc_effects_array[index].port_mask & mask_flag)
+					&& ((htc_effects_array[index].topology_id == topology) || hd_flag))
+					htc_set_adm_effect(htc_payload[index].payload,
+						htc_payload[index].payload_size,
+						htc_effects_array[index].topology_id,
+						hd_flag,
+						port_id);
+		}
+	}
+}
+/* HTC_AUD_END - HTC Effect */
 
 static int slim_get_sample_rate_val(int sample_rate)
 {
@@ -2589,6 +2858,33 @@ static int msm_hifi_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+/* Volume index setting during playing white noise on calibrtion step*/
+static int msm_htc_as20_vol_index_put(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	int value = ucontrol->value.integer.value[0];
+
+	if (value < 0 || value > sizeof(htc_as20_vol_index_text)/sizeof(htc_as20_vol_index_text[0]) -1)
+		htc_as20_volume_index = 0;
+	else
+		htc_as20_volume_index = value;
+
+	pr_info("%s, value %d, htc_as20_volume_index %d\n", __func__ , value, htc_as20_volume_index);
+
+	return 0;
+}
+
+static int msm_htc_as20_vol_index_get(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	pr_info("%s, htc_as20_volume_index %d\n", __func__ , htc_as20_volume_index);
+	ucontrol->value.integer.value[0] = htc_as20_volume_index;
+
+	return 0;
+}
+/* HTC_AUD_END - AS HS {HPKB:7329} */
+
 static const struct snd_kcontrol_new msm_snd_controls[] = {
 	SOC_ENUM_EXT("SLIM_0_RX Channels", slim_0_rx_chs,
 			msm_slim_rx_ch_get, msm_slim_rx_ch_put),
@@ -2809,6 +3105,10 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
 	SOC_ENUM_EXT("HiFi Function", hifi_function, msm_hifi_get,
 			msm_hifi_put),
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+	SOC_ENUM_EXT("HTC_AS20_VOL Index", htc_as20_vol_index,
+			msm_htc_as20_vol_index_get, msm_htc_as20_vol_index_put),
+/* HTC_AUD_END - AS HS {HPKB:7329} */
 };
 
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
@@ -2908,6 +3208,17 @@ static int msm_hifi_ctrl_event(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+/* HTC_AUD_START - add delay to avoid dmic enable pop sound */
+static int msm_dmic_event(struct snd_soc_dapm_widget *w,
+				struct snd_kcontrol *k, int event)
+{
+	if (SND_SOC_DAPM_EVENT_ON(event))
+		usleep_range(10000, 10000);
+
+	return 0;
+}
+/* HTC_AUD_END */
+
 static const struct snd_soc_dapm_widget msm_dapm_widgets[] = {
 
 	SND_SOC_DAPM_SUPPLY("MCLK",  SND_SOC_NOPM, 0, 0,
@@ -2924,8 +3235,14 @@ static const struct snd_soc_dapm_widget msm_dapm_widgets[] = {
 	SND_SOC_DAPM_SPK("hifi amp", msm_hifi_ctrl_event),
 	SND_SOC_DAPM_MIC("Handset Mic", NULL),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+#if 0
 	SND_SOC_DAPM_MIC("ANCRight Headset Mic", NULL),
 	SND_SOC_DAPM_MIC("ANCLeft Headset Mic", NULL),
+#else
+/* htc-mbhc-headset.c */
+#endif
+/* HTC_AUD_END */
 	SND_SOC_DAPM_MIC("Analog Mic5", NULL),
 	SND_SOC_DAPM_MIC("Analog Mic6", NULL),
 
@@ -2935,6 +3252,9 @@ static const struct snd_soc_dapm_widget msm_dapm_widgets[] = {
 	SND_SOC_DAPM_MIC("Digital Mic3", NULL),
 	SND_SOC_DAPM_MIC("Digital Mic4", NULL),
 	SND_SOC_DAPM_MIC("Digital Mic5", NULL),
+/* HTC_AUD_START - add delay to avoid dmic enable pop sound */
+	SND_SOC_DAPM_MIC("Digital Mic", msm_dmic_event),
+/* HTC_AUD_END */
 };
 
 static inline int param_is_mask(int p)
@@ -3573,8 +3893,21 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		return ret;
 	}
 
+/* HTC_AUD_START - HTC Effect {HPKB:2082}*/
+	ret = htc_create_controls(codec);
+	if (ret < 0) {
+		pr_err("%s: add htc effect controls failed, err %d\n",
+			__func__, ret);
+		return ret;
+	}
+/* HTC_AUD_END */
+
 	snd_soc_dapm_new_controls(dapm, msm_dapm_widgets,
 				ARRAY_SIZE(msm_dapm_widgets));
+
+/* HTC_AUD_START - AS HS 2.0 */
+	htc_typec_hs_dapm_new_controls(dapm);
+/* HTC_AUD_END */
 
 	if (!strcmp(dev_name(codec_dai->dev), "tasha_codec"))
 		snd_soc_dapm_add_routes(dapm, wcd_audio_paths_tasha,
@@ -3611,6 +3944,9 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_ignore_suspend(dapm, "VIINPUT");
 	snd_soc_dapm_ignore_suspend(dapm, "ANC HPHL");
 	snd_soc_dapm_ignore_suspend(dapm, "ANC HPHR");
+/* HTC_AUD_START - add delay to avoid dmic enable pop sound */
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic");
+/* HTC_AUD_END */
 
 	if (!strcmp(dev_name(codec_dai->dev), "tasha_codec")) {
 		snd_soc_dapm_ignore_suspend(dapm, "LINEOUT3");
@@ -3799,6 +4135,17 @@ static void *def_tavil_mbhc_cal(void)
 	btn_high = ((void *)&btn_cfg->_v_btn_low) +
 		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
 
+/* HTC_AUD_START - Workaround for headset key event due to SPK interference */
+#ifdef CONFIG_HTC_AUD_OCM
+	btn_high[0] = 788;
+	btn_high[1] = 788;
+	btn_high[2] = 788;
+	btn_high[3] = 788;
+	btn_high[4] = 788;
+	btn_high[5] = 788;
+	btn_high[6] = 788;
+	btn_high[7] = 788;
+#else
 	btn_high[0] = 75;
 	btn_high[1] = 150;
 	btn_high[2] = 237;
@@ -3807,6 +4154,8 @@ static void *def_tavil_mbhc_cal(void)
 	btn_high[5] = 500;
 	btn_high[6] = 500;
 	btn_high[7] = 500;
+#endif
+/* HTC_AUD_END */
 
 	return tavil_wcd_cal;
 }
@@ -4213,6 +4562,34 @@ done:
 	return ret;
 }
 
+static int msm_mi2s_set_mclk(struct snd_pcm_substream *substream, bool enable)
+{
+	int ret = 0;
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	int port_id = 0;
+	int index = cpu_dai->id;
+
+	port_id = msm_get_port_id(rtd->dai_link->be_id);
+	if (IS_ERR_VALUE(port_id)) {
+		dev_err(rtd->card->dev, "%s: Invalid port_id\n", __func__);
+		ret = port_id;
+		goto done;
+	}
+	mi2s_mclk[index].enable = enable;
+	ret = afe_set_lpass_clock_v2(port_id,
+				     &mi2s_mclk[index]);
+	if (ret < 0) {
+		dev_err(rtd->card->dev,
+			"%s: afe lpass clock failed for port 0x%x , err:%d\n",
+			__func__, port_id, ret);
+		goto done;
+	}
+
+done:
+	return ret;
+}
+
 static int msm_set_pinctrl(struct msm_pinctrl_info *pinctrl_info,
 				enum pinctrl_pin_state new_state)
 {
@@ -4247,6 +4624,16 @@ static int msm_set_pinctrl(struct msm_pinctrl_info *pinctrl_info,
 		ret = -EIO;
 		goto err;
 	}
+
+/* HTC_AUD_START */
+	if (IS_ERR_OR_NULL(pinctrl_info->mi2s_active) ||
+		IS_ERR_OR_NULL(pinctrl_info->mi2s_disable) ||
+		IS_ERR_OR_NULL(pinctrl_info->tdm_active) ||
+		IS_ERR_OR_NULL(pinctrl_info->tdm_disable)) {
+		pr_debug("%s: pinctrl is not found\n", __func__);
+		goto err;
+	}
+/* HTC_AUD_END */
 
 	switch (pinctrl_info->curr_state) {
 	case STATE_MI2S_ACTIVE:
@@ -4496,10 +4883,14 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int index = cpu_dai->id;
 	unsigned int fmt = SND_SOC_DAIFMT_CBS_CFS;
+/* HTC_AUD_START - no mi2s tdm switch*/
+#if 0
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
 	int ret_pinctrl = 0;
+#endif
+/* HTC_AUD_END */
 
 	dev_dbg(rtd->card->dev,
 		"%s: substream = %s  stream = %d, dai name %s, dai ID %d\n",
@@ -4513,6 +4904,9 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 			__func__, cpu_dai->id);
 		goto done;
 	}
+
+/* HTC_AUD_START - no mi2s tdm switch*/
+#if 0
 	if (index == QUAT_MI2S) {
 		ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_MI2S_ACTIVE);
 		if (ret_pinctrl) {
@@ -4520,6 +4914,8 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 				__func__, ret_pinctrl);
 		}
 	}
+#endif
+/* HTC_AUD_END */
 
 	/*
 	 * Muxtex protection in case the same MI2S
@@ -4532,6 +4928,13 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		if (!mi2s_intf_conf[index].msm_is_mi2s_master) {
 			fmt = SND_SOC_DAIFMT_CBM_CFM;
 			mi2s_clk[index].clk_id = mi2s_ebit_clk[index];
+		}
+		ret = msm_mi2s_set_mclk(substream, true);
+		if (IS_ERR_VALUE(ret)) {
+			dev_err(rtd->card->dev,
+				"%s: afe lpass clock failed to enable MI2S MCLK clock, err:%d\n",
+				__func__, ret);
+			goto clean_up;
 		}
 		ret = msm_mi2s_set_sclk(substream, true);
 		if (IS_ERR_VALUE(ret)) {
@@ -4560,8 +4963,10 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		}
 	}
 clk_off:
-	if (IS_ERR_VALUE(ret))
+	if (IS_ERR_VALUE(ret)) {
+		msm_mi2s_set_mclk(substream, false);
 		msm_mi2s_set_sclk(substream, false);
+	}
 clean_up:
 	if (IS_ERR_VALUE(ret))
 		mi2s_intf_conf[index].ref_cnt--;
@@ -4575,10 +4980,14 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	int ret;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	int index = rtd->cpu_dai->id;
+/* HTC_AUD_START - no mi2s tdm switch*/
+#if 0
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
 	int ret_pinctrl = 0;
+#endif
+/* HTC_AUD_END */
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 		 substream->name, substream->stream);
@@ -4589,6 +4998,7 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 
 	mutex_lock(&mi2s_intf_conf[index].lock);
 	if (--mi2s_intf_conf[index].ref_cnt == 0) {
+		ret = msm_mi2s_set_mclk(substream, false);
 		ret = msm_mi2s_set_sclk(substream, false);
 		if (ret < 0)
 			pr_err("%s:clock disable failed for MI2S (%d); ret=%d\n",
@@ -4596,12 +5006,17 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	}
 	mutex_unlock(&mi2s_intf_conf[index].lock);
 
+/* HTC_AUD_START - no mi2s tdm switch*/
+#if 0
 	if (index == QUAT_MI2S) {
 		ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_DISABLE);
 		if (ret_pinctrl)
 			pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
 				__func__, ret_pinctrl);
 	}
+#endif
+/* HTC_AUD_END */
+
 }
 
 static struct snd_soc_ops msm_mi2s_be_ops = {
@@ -6404,8 +6819,15 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.stream_name = "Quaternary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.3",
 		.platform_name = "msm-pcm-routing",
+/* HTC_AUD_START - TI porting */
+#ifdef CONFIG_TAS2557_CODEC_STEREO
+		.codec_name     = "tas2557s.7-004c",
+		.codec_dai_name = "tas2557 Stereo ASI1",
+#else
 		.codec_name = "msm-stub-codec.1",
 		.codec_dai_name = "msm-stub-rx",
+#endif
+/* HTC_AUD_END */
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.be_id = MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
@@ -7354,6 +7776,47 @@ static void i2s_auxpcm_deinit(void)
 			mi2s_auxpcm_conf[count].pcm_i2s_sel_vt_addr);
 }
 
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+static int msm8998_setparam(htc_adsp_params_ioctl_t *ctrl)
+{
+	int ret = 0;
+	int type = ctrl->type;
+	int total_size = ctrl->size;
+	int port_id = -1;
+	int index = 0;
+	int mask = 0;
+
+	if (type < eEF_as2_coef_left_im || type > eEF_as2_rtc) {
+		pr_err("%s error type %d", __func__, type);
+		return -EINVAL;
+	}
+
+	index = type + htc_as_offset;
+	mask = htc_effects_array[index].port_mask;
+
+	mutex_lock(&htc_adaptivesound_enable_mutex);
+	if (htc_payload[index].payload) {
+		memcpy(htc_payload[index].payload, (void *)ctrl->params, total_size);
+		while ((port_id = htc_get_port_by_mask(&mask))) {
+			ret &= htc_set_adm_effect(htc_payload[index].payload,
+					htc_payload[index].payload_size,
+					htc_effects_array[index].topology_id,
+					0,
+					port_id);
+		}
+		if (ret)
+			pr_info("%s: htc_effect set AS error on index:%d ret:%d\n", __func__, index, ret);
+	}
+	mutex_unlock(&htc_adaptivesound_enable_mutex);
+
+	return 0;
+}
+
+static struct acoustic_ops acoustic = {
+	.msm_setparam = msm8998_setparam,
+};
+/* HTC_AUD_END */
+
 static int msm_asoc_machine_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card;
@@ -7427,6 +7890,11 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+	mutex_init(&htc_adaptivesound_enable_mutex);
+	htc_acoustic_register_ops(&acoustic);
+/* HTC_AUD_END */
+
 	ret = msm_populate_dai_link_component_of_node(card);
 	if (ret) {
 		ret = -EPROBE_DEFER;
@@ -7448,6 +7916,9 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	}
 	dev_info(&pdev->dev, "Sound card %s registered\n", card->name);
 	spdev = pdev;
+/* HTC_AUD_START - AS HS 2.0 */
+	htc_typec_hs_init(pdev);
+/* HTC_AUD_END */
 
 	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
 	if (ret) {
@@ -7555,6 +8026,11 @@ static int msm_asoc_machine_remove(struct platform_device *pdev)
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(card);
+
+/* HTC_AUD_START - AS HS {HPKB:7329} */
+	htc_typec_hs_deinit();
+	mutex_destroy(&htc_adaptivesound_enable_mutex);
+/* HTC_AUD_END */
 
 	gpio_free(pdata->us_euro_gpio);
 	i2s_auxpcm_deinit();

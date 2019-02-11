@@ -2414,7 +2414,6 @@ static int __check_source_split(struct mdp_input_layer *layer_list,
 	return 0;
 }
 
-
 /*
  * __validate_layers() - validate input layers
  * @mfd:	Framebuffer data structure for display

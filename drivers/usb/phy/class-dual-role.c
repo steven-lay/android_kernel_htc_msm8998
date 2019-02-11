@@ -46,6 +46,7 @@ static struct device_attribute dual_role_attrs[] = {
 	DUAL_ROLE_ATTR(power_role),
 	DUAL_ROLE_ATTR(data_role),
 	DUAL_ROLE_ATTR(powers_vconn),
+	DUAL_ROLE_ATTR(partner_supports_usb_pd),
 };
 
 struct class *dual_role_class;
@@ -70,7 +71,15 @@ static char *kstrdupcase(const char *str, gfp_t gfp, bool to_upper)
 	return ret;
 }
 
-static void dual_role_changed_work(struct work_struct *work);
+static void dual_role_changed_work(struct work_struct *work)
+{
+	struct dual_role_phy_instance *dual_role =
+	    container_of(work, struct dual_role_phy_instance,
+			 changed_work);
+
+	dev_dbg(&dual_role->dev, "%s\n", __func__);
+	kobject_uevent(&dual_role->dev.kobj, KOBJ_CHANGE);
+}
 
 void dual_role_instance_changed(struct dual_role_phy_instance *dual_role)
 {
@@ -259,6 +268,10 @@ static char *vconn_supply_text[] = {
 	"n", "y"
 };
 
+static char *partner_supports_usb_pd_text[] = {
+	"no", "yes"
+};
+
 static ssize_t dual_role_show_property(struct device *dev,
 				       struct device_attribute *attr, char *buf)
 {
@@ -323,7 +336,15 @@ static ssize_t dual_role_show_property(struct device *dev,
 					vconn_supply_text[value]);
 		else
 			return -EIO;
-	} else
+	} else if (off == DUAL_ROLE_PROP_PARTNER_SUPPORTS_USB_PD) {
+		BUILD_BUG_ON(DUAL_ROLE_PROP_PARTNER_SUPPORTS_USB_PD_TOTAL !=
+				ARRAY_SIZE(partner_supports_usb_pd_text));
+		if (value < DUAL_ROLE_PROP_PARTNER_SUPPORTS_USB_PD_TOTAL)
+			return snprintf(buf, PAGE_SIZE, "%s\n",
+					partner_supports_usb_pd_text[value]);
+		else
+			return -EIO;
+	}
 		return -EIO;
 }
 
@@ -495,17 +516,6 @@ out:
 	free_page((unsigned long)prop_buf);
 
 	return ret;
-}
-
-static void dual_role_changed_work(struct work_struct *work)
-{
-	struct dual_role_phy_instance *dual_role =
-	    container_of(work, struct dual_role_phy_instance,
-			 changed_work);
-
-	dev_dbg(&dual_role->dev, "%s\n", __func__);
-	sysfs_update_group(&dual_role->dev.kobj, &dual_role_attr_group);
-	kobject_uevent(&dual_role->dev.kobj, KOBJ_CHANGE);
 }
 
 /******************* Module Init ***********************************/
