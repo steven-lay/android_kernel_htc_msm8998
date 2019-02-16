@@ -54,3 +54,5 @@ CFLAGS_cyttsp5_devtree.o += -DVERBOSE_DEBUG
 CFLAGS_cyttsp5_platform.o += -DVERBOSE_DEBUG
 endif
 
+subdir-ccflags-y += \
+	-Wno-unused-variable

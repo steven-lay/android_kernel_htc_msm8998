@@ -86,8 +86,7 @@
 #ifdef pr_info
 #undef pr_info
 #endif
-#define pr_info(format, arg...) \
-		printk(KERN_INFO "[TP][I] " format "\n", ##arg)
+#define pr_info(format, arg...)
 
 #ifdef pr_err
 #undef pr_err
@@ -97,8 +96,7 @@
 
 #ifdef dev_info
 #undef dev_info
-#define dev_info(dev, format, arg...)		\
-	_dev_info(dev, "[TP][I] "format, ##arg)
+#define dev_info(dev, format, arg...)
 #endif
 
 #if 0
@@ -111,8 +109,7 @@
 
 #ifdef dev_dbg
 #undef dev_dbg
-#define dev_dbg(dev, format, arg...)		\
-	_dev_info(dev, "[TP][D] "format, ##arg)
+#define dev_dbg(dev, format, arg...)
 #endif
 
 #define htc_dev_err(dev, format, arg...)		\

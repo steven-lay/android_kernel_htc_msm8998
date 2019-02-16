@@ -35,10 +35,8 @@
 #include <linux/vibtrig.h>
 #include <linux/spinlock.h>
 
-#define VIB_DBG_LOG(fmt, ...) \
-		printk(KERN_DEBUG "[VIB][DBG] " fmt, ##__VA_ARGS__)
-#define VIB_INFO_LOG(fmt, ...) \
-		printk(KERN_INFO "[VIB] " fmt, ##__VA_ARGS__)
+#define VIB_DBG_LOG(fmt, ...)
+#define VIB_INFO_LOG(fmt, ...)
 #define VIB_ERR_LOG(fmt, ...) \
 		printk(KERN_ERR "[VIB][ERR] " fmt, ##__VA_ARGS__)
 
