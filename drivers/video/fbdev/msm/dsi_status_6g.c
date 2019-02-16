@@ -71,7 +71,9 @@ static bool mdss_check_te_status_v2(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	} else {
 		if (te->count < 2)
 			msleep(100);
+#if 0
 		pr_info("%s: te_count=%d\n", __func__, te->count);
+#endif
 		ret = te->count >=2 ? true : false;
 	}
 	if (ret) {

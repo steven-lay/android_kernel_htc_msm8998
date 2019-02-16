@@ -958,8 +958,9 @@ void send_dsi_status_notify(int status)
 		dsi_notifier->func(status);
 	}
 	mutex_unlock(&dsi_notify_sem);
-
+#if 0
 	pr_info("%s: status=%d\n",__func__, status);
+#endif
 }
 
 void htc_vreg_vol_switch(struct mdss_dsi_ctrl_pdata *ctrl_pdata, bool enable)
