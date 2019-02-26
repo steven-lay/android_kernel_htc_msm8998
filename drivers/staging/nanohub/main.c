@@ -2112,12 +2112,8 @@ static int nanohub_kthread(void *arg)
 	struct timespec curr_ts;
 	uint32_t clear_interrupts[8] = { 0x00000006 };
 	struct device *sensor_dev = data->io[ID_NANOHUB_SENSOR].dev;
-	static const struct sched_param param = {
-		.sched_priority = (MAX_USER_RT_PRIO/2)-1,
-	};
 
 	data->err_cnt = 0;
-	sched_setscheduler(current, SCHED_FIFO, &param);
 	nanohub_set_state(data, ST_IDLE);
 
 	while (!kthread_should_stop()) {
