@@ -257,7 +257,7 @@ static void process_command_deregistration(uint8_t *buf, uint32_t len,
 	read_len += header_len - (2 * sizeof(uint32_t));
 
 	if (dereg->count_entries == 0) {
-		pr_debug("diag: In %s, received reg tbl with no entries\n",
+		DIAGFWD_DBUG("diag: In %s, received reg tbl with no entries\n",
 			 __func__);
 		return;
 	}
@@ -302,7 +302,7 @@ static void process_command_registration(uint8_t *buf, uint32_t len,
 	read_len += header_len - (2 * sizeof(uint32_t));
 
 	if (reg->count_entries == 0) {
-		pr_debug("diag: In %s, received reg tbl with no entries\n",
+		DIAGFWD_DBUG("diag: In %s, received reg tbl with no entries\n",
 			 __func__);
 		return;
 	}
@@ -383,7 +383,7 @@ static void process_incoming_feature_mask(uint8_t *buf, uint32_t len,
 	feature_mask_len = header->feature_mask_len;
 
 	if (feature_mask_len == 0) {
-		pr_debug("diag: In %s, received invalid feature mask from peripheral %d\n",
+		DIAGFWD_DBUG("diag: In %s, received invalid feature mask from peripheral %d\n",
 			 __func__, peripheral);
 		return;
 	}
@@ -443,8 +443,8 @@ static void process_last_event_report(uint8_t *buf, uint32_t len,
 	header = (struct diag_ctrl_last_event_report *)ptr;
 	event_size = ((header->event_last_id / 8) + 1);
 	if (event_size >= driver->event_mask_size) {
-		DIAG_LOG(DIAG_DEBUG_MASKS,
-		"diag: receiving event mask size more that Apps can handle\n");
+		DIAGFWD_DBUG("diag: In %s, receiving event mask size more that Apps can handle\n",
+			 __func__);
 		temp = krealloc(driver->event_mask->ptr, event_size,
 				GFP_KERNEL);
 		if (!temp) {
@@ -767,7 +767,7 @@ void diag_cntl_process_read_data(struct diagfwd_info *p_info, void *buf,
 						p_info->peripheral);
 			break;
 		default:
-			pr_debug("diag: Control packet %d not supported\n",
+			DIAGFWD_DBUG("diag: Control packet %d not supported\n",
 				 ctrl_pkt->pkt_id);
 		}
 		ptr += header_len + ctrl_pkt->len;
@@ -991,14 +991,14 @@ void diag_real_time_work_fn(struct work_struct *work)
 	for (i = 0; i < DIAG_NUM_PROC; i++) {
 		temp_real_time = diag_compute_real_time(i);
 		if (temp_real_time == driver->real_time_mode[i]) {
-			pr_debug("diag: did not update real time mode on proc %d, already in the req mode %d",
+			DIAGFWD_DBUG("diag: did not update real time mode on proc %d, already in the req mode %d",
 				i, temp_real_time);
 			continue;
 		}
 
 		if (i == DIAG_LOCAL_PROC) {
 			if (!send_update) {
-				pr_debug("diag: In %s, cannot send real time mode pkt since one of the periperhal is in buffering mode\n",
+				DIAGFWD_DBUG("diag: In %s, cannot send real time mode pkt since one of the periperhal is in buffering mode\n",
 					 __func__);
 				break;
 			}
@@ -1033,7 +1033,7 @@ void diag_real_time_work_fn(struct work_struct *work)
 			temp_real_time = MODE_NONREALTIME;
 		}
 		if (temp_real_time == driver->real_time_mode[i]) {
-			pr_debug("diag: did not update real time mode on proc %d, already in the req mode %d",
+			DIAGFWD_DBUG("diag: did not update real time mode on proc %d, already in the req mode %d",
 				i, temp_real_time);
 			continue;
 		}
@@ -1068,7 +1068,7 @@ static int __diag_send_real_time_update(uint8_t peripheral, int real_time,
 
 	if (!driver->diagfwd_cntl[peripheral] ||
 	    !driver->diagfwd_cntl[peripheral]->ch_open) {
-		pr_debug("diag: In %s, control channel is not open, p: %d\n",
+		DIAGFWD_DBUG("diag: In %s, control channel is not open, p: %d\n",
 			 __func__, peripheral);
 		return err;
 	}
@@ -1216,7 +1216,7 @@ int diag_send_peripheral_buffering_mode(struct diag_buffering_mode_t *params)
 	}
 
 	if (!driver->feature[peripheral].peripheral_buffering) {
-		pr_debug("diag: In %s, peripheral %d doesn't support buffering\n",
+		DIAGFWD_DBUG("diag: In %s, peripheral %d doesn't support buffering\n",
 			 __func__, peripheral);
 		driver->buffering_flag[params->peripheral] = 0;
 		return -EIO;
@@ -1312,14 +1312,14 @@ int diag_send_peripheral_drain_immediate(uint8_t pd,
 	struct diag_ctrl_drain_immediate_v2 ctrl_pkt_v2;
 
 	if (!driver->feature[peripheral].peripheral_buffering) {
-		pr_debug("diag: In %s, peripheral  %d doesn't support buffering\n",
+		DIAGFWD_DBUG("diag: In %s, peripheral  %d doesn't support buffering\n",
 			 __func__, peripheral);
 		return -EINVAL;
 	}
 
 	if (!driver->diagfwd_cntl[peripheral] ||
 	    !driver->diagfwd_cntl[peripheral]->ch_open) {
-		pr_debug("diag: In %s, control channel is not open, p: %d\n",
+		DIAGFWD_DBUG("diag: In %s, control channel is not open, p: %d\n",
 			 __func__, peripheral);
 		return -ENODEV;
 	}
@@ -1377,7 +1377,7 @@ int diag_send_buffering_tx_mode_pkt(uint8_t peripheral,
 	}
 
 	if (!driver->feature[peripheral].peripheral_buffering) {
-		pr_debug("diag: In %s, peripheral  %d doesn't support buffering\n",
+		DIAGFWD_DBUG("diag: In %s, peripheral  %d doesn't support buffering\n",
 			 __func__, peripheral);
 		return -EINVAL;
 	}
@@ -1456,14 +1456,14 @@ int diag_send_buffering_wm_values(uint8_t peripheral,
 	}
 
 	if (!driver->feature[peripheral].peripheral_buffering) {
-		pr_debug("diag: In %s, peripheral  %d doesn't support buffering\n",
+		DIAGFWD_DBUG("diag: In %s, peripheral  %d doesn't support buffering\n",
 			 __func__, peripheral);
 		return -EINVAL;
 	}
 
 	if (!driver->diagfwd_cntl[peripheral] ||
 	    !driver->diagfwd_cntl[peripheral]->ch_open) {
-		pr_debug("diag: In %s, control channel is not open, p: %d\n",
+		DIAGFWD_DBUG("diag: In %s, control channel is not open, p: %d\n",
 			 __func__, peripheral);
 		return -ENODEV;
 	}

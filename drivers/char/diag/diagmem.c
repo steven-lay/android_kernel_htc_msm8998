@@ -153,7 +153,7 @@ void diagmem_setsize(int pool_idx, int itemsize, int poolsize)
 
 	diag_mempools[pool_idx].itemsize = itemsize;
 	diag_mempools[pool_idx].poolsize = poolsize;
-	pr_debug("diag: Mempool %s sizes: itemsize %d poolsize %d\n",
+	DIAG_DBUG("diag: Mempool %s sizes: itemsize %d poolsize %d\n",
 		 diag_mempools[pool_idx].name, diag_mempools[pool_idx].itemsize,
 		 diag_mempools[pool_idx].poolsize);
 }
@@ -190,7 +190,7 @@ void *diagmem_alloc(struct diagchar_dev *driver, int size, int pool_type)
 		}
 		spin_unlock_irqrestore(&mempool->lock, flags);
 		if (!buf) {
-			pr_debug_ratelimited("diag: Unable to allocate buffer from memory pool %s, size: %d/%d count: %d/%d\n",
+			DIAG_DBUG("diag: Unable to allocate buffer from memory pool %s, size: %d/%d count: %d/%d\n",
 					     mempool->name,
 					     size, mempool->itemsize,
 					     mempool->count,
@@ -246,7 +246,7 @@ void diagmem_init(struct diagchar_dev *driver, int index)
 
 	mempool = &diag_mempools[index];
 	if (mempool->pool) {
-		pr_debug("diag: mempool %s is already initialized\n",
+		DIAG_DBUG("diag: mempool %s is already initialized\n",
 			 mempool->name);
 		return;
 	}

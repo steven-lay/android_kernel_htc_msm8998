@@ -713,7 +713,7 @@ static ssize_t diag_dbgfs_read_glinkinfo(struct file *file, char __user *ubuf,
 
 	if (diag_dbgfs_glinkinfo_index >= NUM_PERIPHERALS) {
 		/* Done. Reset to prepare for future requests */
-		diag_dbgfs_socketinfo_index = 0;
+		diag_dbgfs_glinkinfo_index = 0;
 		return 0;
 	}
 

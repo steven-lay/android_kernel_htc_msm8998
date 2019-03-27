@@ -258,7 +258,7 @@ int crc_check(uint8_t *buf, uint16_t len)
 	sent_crc[0] = buf[len-3];
 	sent_crc[1] = buf[len-2];
 	if (crc != *((uint16_t *)sent_crc)) {
-		pr_debug("diag: In %s, crc mismatch. expected: %x, sent %x.\n",
+		DIAG_DBUG("diag: In %s, crc mismatch. expected: %x, sent %x.\n",
 				__func__, crc, *((uint16_t *)sent_crc));
 		return -EIO;
 	}

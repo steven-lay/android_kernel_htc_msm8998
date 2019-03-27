@@ -73,7 +73,7 @@
 #define DIAG_QSC		"diag_qsc"
 #define DIAG_MDM2		"diag_mdm2"
 
-#define DIAG_XPST		0
+#define DIAG_XPST		1
 
 #define USB_DIAG_CONNECT	0
 #define USB_DIAG_DISCONNECT	1

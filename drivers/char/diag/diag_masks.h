@@ -15,6 +15,12 @@
 
 #include "diagfwd.h"
 
+/*++ 2015/10/26, USB Team, PCN00033 ++*/
+#define DQ_FILTER_MASK      0x1
+#define UNUSED_FILTER_MASK  0x2
+#define WCNSS_FILTER_MASK   0x4
+/*-- 2015/10/26, USB Team, PCN00033 --*/
+
 struct diag_log_mask_t {
 	uint8_t equip_id;
 	uint32_t num_items;

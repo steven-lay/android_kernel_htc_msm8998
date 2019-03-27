@@ -167,9 +167,9 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 		if (ch->tbl[i].buf != buf)
 			continue;
 		found = 1;
-		pr_err_ratelimited("diag: trying to write the same buffer buf: %pK, len: %d, back to the table for p: %d, t: %d, buf_num: %d, proc: %d, i: %d\n",
+		pr_err_ratelimited("diag: trying to write the same buffer buf: %pK, len: %d, back to the table for p: %d, t: %d, so flushing the table entry, proc: %d\n",
 				   buf, ch->tbl[i].len, GET_BUF_PERIPHERAL(ctx),
-				   GET_BUF_TYPE(ctx), GET_BUF_NUM(ctx), id, i);
+				   GET_BUF_TYPE(ctx), id);
 		ch->tbl[i].buf = NULL;
 		ch->tbl[i].len = 0;
 		ch->tbl[i].ctx = 0;
@@ -205,11 +205,11 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 			continue;
 
 		found = 1;
-		if (!(driver->data_ready[i] & USER_SPACE_DATA_TYPE)) {
-			driver->data_ready[i] |= USER_SPACE_DATA_TYPE;
+		if (!(driver->data_ready[i] & USERMODE_DIAGFWD)) {
+			driver->data_ready[i] |= USERMODE_DIAGFWD;
 			atomic_inc(&driver->data_ready_notif[i]);
 		}
-		pr_debug("diag: wake up logging process\n");
+		DIAG_DBUG("diag: wake up logging process\n");
 		wake_up_interruptible(&driver->wait_q);
 	}
 	mutex_unlock(&driver->diagchar_mutex);
