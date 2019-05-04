@@ -19,6 +19,12 @@
 #include <linux/regulator/consumer.h>
 #include <linux/extcon.h>
 #include "storm-watch.h"
+#ifdef CONFIG_HTC_BATT
+#include <linux/power/htc_battery.h>
+#include <linux/qpnp/qpnp-adc.h>
+//#include <linux/htc_flags.h>
+#endif  //CONFIG_HTC_BATT
+
 
 enum print_reason {
 	PR_INTERRUPT	= BIT(0),
@@ -67,7 +73,11 @@ enum print_reason {
 #define WEAK_CHARGER_VOTER		"WEAK_CHARGER_VOTER"
 #define OV_VOTER			"OV_VOTER"
 
+#ifdef CONFIG_HTC_USB
+#define VCONN_MAX_ATTEMPTS	30
+#else
 #define VCONN_MAX_ATTEMPTS	3
+#endif
 #define OTG_MAX_ATTEMPTS	3
 #define BOOST_BACK_STORM_COUNT	3
 #define WEAK_CHG_STORM_COUNT	8
@@ -85,6 +95,9 @@ enum {
 	QC_AUTH_INTERRUPT_WA_BIT	= BIT(3),
 	OTG_WA				= BIT(4),
 	OV_IRQ_WA_BIT			= BIT(5),
+#ifdef CONFIG_HTC_BATT
+	EXT_OTG_HEADSET_WA		= BIT(10),
+#endif
 };
 
 enum smb_irq_index {
@@ -148,6 +161,21 @@ static const unsigned int smblib_extcon_cable[] = {
 
 /* EXTCON_USB and EXTCON_USB_HOST are mutually exclusive */
 static const u32 smblib_extcon_exclusive[] = {0x3, 0};
+
+#ifdef CONFIG_HTC_BATT
+enum {
+	FLOAT_NONE = 0,
+	FLOAT_CHECKING,
+	FLOAT_DETECTED,
+};
+
+enum {
+	CC_DET_NONE = 0,
+	CC_DET_DEFAULT,
+	CC_DET_MEDIUM,
+	CC_DET_HIGH,
+};
+#endif  //CONFIG_HTC_BATT
 
 struct smb_regulator {
 	struct regulator_dev	*rdev;
@@ -265,7 +293,12 @@ struct smb_charger {
 	/* regulators */
 	struct smb_regulator	*vbus_vreg;
 	struct smb_regulator	*vconn_vreg;
+	struct regulator	*bob_vreg;
 	struct regulator	*dpdm_reg;
+// htc_usb_ext_otg +++
+	struct regulator	*ext_power;
+	bool			wa_ext_otg_ignore_usb_in;
+// htc_usb_ext_otg ---
 
 	/* votables */
 	struct votable		*dc_suspend_votable;
@@ -292,6 +325,15 @@ struct smb_charger {
 	struct delayed_work	hvdcp_detect_work;
 	struct delayed_work	ps_change_timeout_work;
 	struct delayed_work	clear_hdc_work;
+#ifdef CONFIG_HTC_BATT
+	struct delayed_work	chk_usb_icl_work;
+	struct delayed_work	floating_chk_work;
+	struct delayed_work	reverse_boost_chk_work;
+	struct delayed_work	cc_floating_chk_work;
+	struct delayed_work	type_c_aicl_chk_work;
+	struct delayed_work	reboot_suspend_chk_work;
+	struct delayed_work     type_c_no_debounce_work;
+#endif //CONFIG_HTC_BATT
 	struct work_struct	otg_oc_work;
 	struct work_struct	vconn_oc_work;
 	struct delayed_work	otg_ss_done_work;
@@ -299,6 +341,7 @@ struct smb_charger {
 	struct delayed_work	pl_enable_work;
 	struct work_struct	legacy_detection_work;
 	struct delayed_work	uusb_otg_work;
+	struct delayed_work	usb_typec_change_work;
 	struct delayed_work	bb_removal_work;
 
 	/* cached status */
@@ -322,8 +365,16 @@ struct smb_charger {
 	bool			suspend_input_on_debug_batt;
 	int			otg_attempts;
 	int			vconn_attempts;
+#ifdef CONFIG_HTC_BATT
+	int			float_chk_sts;
+	int			cc_first_det_sts;
+	bool			abnormal_cc_check_sts;
+	bool			hvdcp_disable;
+#endif //CONFIG_HTC_BATT
 	int			default_icl_ua;
 	int			otg_cl_ua;
+	/* htc mfg */
+	int			vconn_sel;
 	bool			uusb_apsd_rerun_done;
 	bool			pd_hard_reset;
 	bool			typec_present;
@@ -448,6 +499,14 @@ int smblib_get_prop_dc_current_max(struct smb_charger *chg,
 int smblib_set_prop_dc_current_max(struct smb_charger *chg,
 				const union power_supply_propval *val);
 
+#ifdef CONFIG_HTC_BATT
+int smblib_get_bat_fet_off(struct smb_charger *chg, int *suspend);
+int smblib_set_bat_fet_off(struct smb_charger *chg, bool suspend);
+void smblib_check_batt_enable(struct smb_charger *chg,union power_supply_propval *val);
+void smblib_check_chg_enable(struct smb_charger *chg,union power_supply_propval *val);
+int smblib_get_usb_conn_temp(struct smb_charger *chg, struct qpnp_vadc_chip *vadc_dev,
+				unsigned int vadc_channel, union power_supply_propval *val);
+#endif
 int smblib_get_prop_usb_present(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_prop_usb_online(struct smb_charger *chg,
@@ -502,6 +561,17 @@ int smblib_get_prop_slave_current_now(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_set_prop_ship_mode(struct smb_charger *chg,
 				const union power_supply_propval *val);
+int smblib_get_prop_otg_state(struct smb_charger *chg,
+				union power_supply_propval *val);
+int smblib_set_prop_otg_state(struct smb_charger *chg,
+				const union power_supply_propval *val);
+int smblib_set_poweroff_sel(struct smb_charger *chg,
+			const union power_supply_propval *val);
+int smblib_get_ext_otg_control(struct smb_charger *chg,
+			union power_supply_propval *val);
+int smblib_set_ext_otg_control(struct smb_charger *chg,
+			const union power_supply_propval *val);
+int smblib_vbus_disable(struct smb_charger *chg);
 int smblib_set_prop_charge_qnovo_enable(struct smb_charger *chg,
 				const union power_supply_propval *val);
 void smblib_suspend_on_debug_battery(struct smb_charger *chg);
@@ -522,4 +592,15 @@ int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
 
 int smblib_init(struct smb_charger *chg);
 int smblib_deinit(struct smb_charger *chg);
+#ifdef CONFIG_HTC_BATT
+
+int smblib_get_ext_otg_chg_control(struct smb_charger *chg,
+			union power_supply_propval *val);
+int smblib_set_ext_otg_chg_control(struct smb_charger *chg,
+			const union power_supply_propval *val);
+int smblib_get_usb_in_isen_adc(struct smb_charger *chg, struct qpnp_vadc_chip *vadc_usb_in_isen,
+					unsigned int vadc_usb_in_isen_channel ,union power_supply_propval *val);
+int smblib_get_usb_in_isen_current_ma(struct smb_charger *chg, unsigned int iusb_rsen,
+                                                unsigned int iusb_multiplier, struct qpnp_vadc_chip *vadc_usb_in_isen, unsigned int vadc_usb_in_isen_channel, union power_supply_propval *val);
+#endif // CONFIG_HTC_BATT
 #endif /* __SMB2_CHARGER_H */

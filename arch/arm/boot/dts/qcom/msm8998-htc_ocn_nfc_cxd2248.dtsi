@@ -1,0 +1,28 @@
+&i2c_8 {
+	qcom,disable-dma;
+	status = "okay";
+	sony_cxd224x_nfc@2b {
+		compatible = "sony,nfccxd224x";
+		reg = <0x2b>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <92 0x2>;
+		sony,wake_gpio = <&tlmm 12 0x00>;
+		sony,irq_gpio = <&tlmm 92 0x00>;
+		sony,rst_gpio = <&tlmm 11 0x00>;
+		nfc_regulator = "pm8998_lvs1";
+	};
+
+};
+
+&pmi8998_gpios {
+        gpio@c700 {  /*GPIO_8 FEL_CW_DET*/
+                qcom,mode = <0>;                /* Digital input */
+                qcom,pull = <5>;                /* No Pull */
+                qcom,vin-sel = <0>;             /* VIN1 GPIO_LV */
+                qcom,src-sel = <0>;             /* GPIO */
+                qcom,invert = <0>;              /* Invert 0 INVERT_DISABLE */
+                qcom,master-en = <1>;           /* Enable GPIO */
+                status = "ok";
+        };
+};
+

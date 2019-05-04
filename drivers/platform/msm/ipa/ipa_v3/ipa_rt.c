@@ -63,6 +63,7 @@ static int ipa_generate_rt_hw_rule(enum ipa_ip_type ip,
 		WARN_ON_RATELIMIT_IPA(1);
 		return -EPERM;
 	}
+	BUG_ON(gen_params.dst_pipe_idx == 1);
 	if (!IPA_CLIENT_IS_CONS(entry->rule.dst)) {
 		IPAERR_RL("No RT rule on IPA_client_producer pipe.\n");
 		IPAERR_RL("pipe_idx: %d dst_pipe: %d\n",

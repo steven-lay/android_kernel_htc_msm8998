@@ -6401,6 +6401,15 @@ int voc_start_voice_call(uint32_t session_id)
 		}
 
 		v->voc_state = VOC_RUN;
+
+/* HTC_AUD_START: enable afe sidetone */
+		ret = afe_sidetone_enable(v->dev_tx.port_id, v->dev_rx.port_id,
+					  voc_get_afe_sidetone());
+		if (ret < 0) {
+			pr_err("enable afe sidetone failed\n");
+			goto fail;
+		}
+/* HTC_AUD_END */
 	} else {
 		pr_err("%s: Error: Start voice called in state %d\n",
 			__func__, v->voc_state);

@@ -160,9 +160,14 @@
 					   "usbin_i",
 					   "usbin_v";
 
+			qcom,usb_conn_temp-vadc = <&pm8998_vadc>;
+			qcom,usb_conn_temp-channel = <0x16>; //GPIO12
+
 			qcom,boost-threshold-ua = <100000>;
 			qcom,wipower-max-uw = <5000000>;
 			dpdm-supply = <&qusb_phy0>;
+
+			qcom,usb-icl-ua = <3000000>;
 
 			qcom,thermal-mitigation
 					= <3000000 1500000 1000000 500000>;
@@ -302,8 +307,8 @@
 					  "msg-rx-discarded";
 
 			qcom,default-sink-caps = <5000 3000>, /* 5V @ 3A */
-						 <9000 3000>, /* 9V @ 3A */
-						 <12000 2250>; /* 12V @ 2.25A */
+						 <9000 3000>; /* 9V @ 3A */
+						 //<12000 2250>; /* 12V @ 2.25A */
 		};
 
 		bcl@4200 {
@@ -341,6 +346,7 @@
 			qcom,fg-esr-timer-asleep = <256 256>;
 			qcom,fg-esr-timer-charging = <0 96>;
 			qcom,cycle-counter-en;
+			qcom,fg-force-load-profile = <1>;
 			status = "okay";
 
 			qcom,fg-batt-soc@4000 {
@@ -687,11 +693,11 @@
 			pmi8998_flash0: qcom,flash_0 {
 				label = "flash";
 				qcom,led-name = "led:flash_0";
-				qcom,max-current = <1500>;
+				qcom,max-current = <1000>;
 				qcom,default-led-trigger = "flash0_trigger";
 				qcom,id = <0>;
 				qcom,current-ma = <1000>;
-				qcom,duration-ms = <1280>;
+				qcom,duration-ms = <600>;
 				qcom,ires-ua = <12500>;
 				qcom,hdrm-voltage-mv = <325>;
 				qcom,hdrm-vol-hi-lo-win-mv = <100>;
@@ -700,16 +706,16 @@
 			pmi8998_flash1: qcom,flash_1 {
 				label = "flash";
 				qcom,led-name = "led:flash_1";
-				qcom,max-current = <1500>;
+				qcom,max-current = <1000>;
 				qcom,default-led-trigger = "flash1_trigger";
 				qcom,id = <1>;
 				qcom,current-ma = <1000>;
-				qcom,duration-ms = <1280>;
+				qcom,duration-ms = <600>;
 				qcom,ires-ua = <12500>;
 				qcom,hdrm-voltage-mv = <325>;
 				qcom,hdrm-vol-hi-lo-win-mv = <100>;
 			};
-
+/*
 			pmi8998_flash2: qcom,flash_2 {
 				label = "flash";
 				qcom,led-name = "led:flash_2";
@@ -722,7 +728,7 @@
 				qcom,hdrm-voltage-mv = <325>;
 				qcom,hdrm-vol-hi-lo-win-mv = <100>;
 			};
-
+*/
 			pmi8998_torch0: qcom,torch_0 {
 				label = "torch";
 				qcom,led-name = "led:torch_0";
@@ -746,7 +752,7 @@
 				qcom,hdrm-voltage-mv = <325>;
 				qcom,hdrm-vol-hi-lo-win-mv = <100>;
 			};
-
+/*
 			pmi8998_torch2: qcom,torch_2 {
 				label = "torch";
 				qcom,led-name = "led:torch_2";
@@ -758,6 +764,7 @@
 				qcom,hdrm-voltage-mv = <325>;
 				qcom,hdrm-vol-hi-lo-win-mv = <100>;
 			};
+*/
 
 			pmi8998_switch0: qcom,led_switch_0 {
 				label = "switch";
@@ -766,12 +773,18 @@
 				qcom,default-led-trigger = "switch0_trigger";
 			};
 
+/*
 			pmi8998_switch1: qcom,led_switch_1 {
 				label = "switch";
 				qcom,led-name = "led:switch_1";
 				qcom,led-mask = <4>;
 				qcom,default-led-trigger = "switch1_trigger";
+				reg0 {
+					regulator-name = "pm8998_bob";
+					max-voltage-uv = <3600000>;
+				};
 			};
+*/
 		};
 	};
 };

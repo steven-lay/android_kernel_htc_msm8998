@@ -823,13 +823,21 @@ static int ufs_qcom_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	struct phy *phy = host->generic_phy;
 	int err;
+	int err_count = 0;
 
-	err = phy_power_on(phy);
-	if (err) {
-		dev_err(hba->dev, "%s: failed enabling regs, err = %d\n",
-			__func__, err);
-		goto out;
-	}
+	do {
+		err = phy_power_on(phy);
+		if (err) {
+			dev_err(hba->dev, "%s: failed enabling regs, err = %d\n",
+				__func__, err);
+			err_count++;
+			if (err_count >= 3) {
+				BUG_ON(1);
+				goto out;
+			}
+			udelay(1);
+		}
+	} while (err);
 
 	if (host->vddp_ref_clk && (hba->rpm_lvl > UFS_PM_LVL_3 ||
 				   hba->spm_lvl > UFS_PM_LVL_3))
@@ -837,12 +845,14 @@ static int ufs_qcom_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 				      host->vddp_ref_clk);
 
 	err = ufs_qcom_enable_lane_clks(host);
-	if (err)
+	if (err) {
+		pr_err("%s ufs_qcom_enable_lane_clks fail\n", __func__);
 		goto out;
+	}
 
 	err = ufs_qcom_ice_resume(host);
 	if (err) {
-		dev_err(hba->dev, "%s: ufs_qcom_ice_resume failed, err = %d\n",
+		pr_err("%s: ufs_qcom_ice_resume failed, err = %d\n",
 			__func__, err);
 		goto out;
 	}
@@ -850,6 +860,10 @@ static int ufs_qcom_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 	hba->is_sys_suspended = false;
 
 out:
+	if (err) {
+		pr_err("%s fail\n", __func__);
+		BUG_ON(1);
+	}
 	return err;
 }
 
@@ -1518,7 +1532,9 @@ static void ufs_qcom_set_caps(struct ufs_hba *hba)
 	if (!host->disable_lpm) {
 		hba->caps |= UFSHCD_CAP_CLK_GATING;
 		hba->caps |= UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
+#if 0
 		hba->caps |= UFSHCD_CAP_CLK_SCALING;
+#endif
 	}
 	hba->caps |= UFSHCD_CAP_AUTO_BKOPS_SUSPEND;
 

@@ -1149,7 +1149,14 @@ int slim_bulk_msg_write(struct slim_device *sb, u8 mt, u8 mc,
 			struct slim_val_inf msgs[], int n,
 			int (*comp_cb)(void *ctx, int err), void *ctx)
 {
+/* HTC_AUD_START Fix Klockwork */
+#if 0
 	int i, ret;
+#else
+	int i;
+	int ret = 0;
+#endif
+/* HTC_AUD_END */
 
 	if (!sb || !sb->ctrl || !msgs)
 		return -EINVAL;

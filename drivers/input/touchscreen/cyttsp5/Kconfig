@@ -1,0 +1,73 @@
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5
+	bool "Parade TrueTouch Gen5 Touchscreen Driver"
+	default n
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_DEVICETREE_SUPPORT
+	bool "Enable Device Tree support"
+	default n
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_DEBUG
+	bool "Enable debug output"
+	default n
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_VDEBUG
+	bool "Enable verbose debug output"
+	default n
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_I2C
+	bool "Parade TrueTouch Gen5 I2C"
+ 	default n 	
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_MT_A
+	bool "Protocol A"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_MT_B
+	bool "Protocol B"
+ 	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_BUTTON
+	bool "Parade TrueTouch Gen5 MultiTouch CapSense Button"
+  default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_PROXIMITY
+	bool "Parade TrueTouch Gen5 Proximity"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_DEVICE_ACCESS
+	bool "Parade TrueTouch Gen5 MultiTouch Device Access"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_DEVICE_ACCESS_API
+	bool "Enable Device Access kernel API"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_TEST_DEVICE_ACCESS_API
+	bool "Simple Test module for Device Access kernel API"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_LOADER
+	bool "Parade TrueTouch Gen5 MultiTouch Loader"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_PLATFORM_FW_UPGRADE
+	bool "FW upgrade from header file"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_BINARY_FW_UPGRADE
+	bool "FW upgrade from binary file"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_PLATFORM_TTCONFIG_UPGRADE
+	bool "TT Configuration upgrade from header file"
+	default n 
+	
+config TOUCHSCREEN_CYPRESS_CYTTSP5_MANUAL_TTCONFIG_UPGRADE
+	bool "TT Configuration upgrade via SysFs"
+	default n 
+
+config TOUCHSCREEN_CYPRESS_CYTTSP5_DEBUG_MDL
+	bool "Parade TrueTouch Gen5 MultiTouch Debug Module"
+	default n 
+

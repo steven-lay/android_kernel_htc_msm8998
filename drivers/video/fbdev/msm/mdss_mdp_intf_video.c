@@ -559,10 +559,11 @@ static void mdss_mdp_video_avr_ctrl_setup(struct mdss_mdp_video_ctx *ctx,
 		/*
 		 * When AVR is enabled, need to setup DSI Video mode control
 		 */
-		mdss_mdp_ctl_intf_event(ctl,
-				MDSS_EVENT_AVR_MODE,
-				(void *)(unsigned long) avr_ctrl,
-				CTL_INTF_EVENT_FLAG_DEFAULT);
+		if (ctl->intf_type == MDSS_INTF_DSI)
+			mdss_mdp_ctl_intf_event(ctl,
+					MDSS_EVENT_AVR_MODE,
+					(void *)(unsigned long) avr_ctrl,
+					CTL_INTF_EVENT_FLAG_DEFAULT);
 	}
 
 	mdp_video_write(ctx, MDSS_MDP_REG_INTF_AVR_MODE, avr_mode);

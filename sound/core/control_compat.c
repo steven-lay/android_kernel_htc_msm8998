@@ -41,6 +41,11 @@ static int snd_ctl_elem_list_compat(struct snd_card *card,
 
 	data = compat_alloc_user_space(sizeof(*data));
 
+/* HTC_AUD_START Fix Klockwork */
+	if (data == NULL)
+		return -ENOMEM;
+/* HTC_AUD_END */
+
 	/* offset, space, used, count */
 	if (copy_in_user(data, data32, 4 * sizeof(u32)))
 		return -EFAULT;

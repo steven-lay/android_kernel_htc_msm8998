@@ -522,9 +522,11 @@ ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t 
 
 EXPORT_SYMBOL(__kernel_write);
 
+extern atomic_t em_remount;
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+	struct super_block *sb = file->f_path.dentry->d_sb;
 
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
@@ -532,6 +534,12 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		return -EINVAL;
 	if (unlikely(!access_ok(VERIFY_READ, buf, count)))
 		return -EFAULT;
+	if (atomic_read(&em_remount) && sb && (sb->s_flags & MS_EMERGENCY_RO)) {
+		printk_ratelimited(KERN_WARNING "VFS reject: %s pid:%d(%s)(parent:%d/%s) file %s count %lu\n", __func__,
+				current->pid, current->comm, current->parent->pid,
+				current->parent->comm, file->f_path.dentry->d_name.name, (unsigned long) count);
+		return -EROFS;
+	}
 
 	ret = rw_verify_area(WRITE, file, pos, count);
 	if (ret >= 0) {

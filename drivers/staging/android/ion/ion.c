@@ -1687,10 +1687,15 @@ static const struct file_operations ion_fops = {
 	.compat_ioctl   = compat_ion_ioctl,
 };
 
-static size_t ion_debug_heap_total(struct ion_client *client,
+struct ion_heap_total {
+	size_t vss;
+	size_t pss;
+};
+
+static struct ion_heap_total ion_debug_heap_total(struct ion_client *client,
 				   unsigned int id)
 {
-	size_t size = 0;
+	struct ion_heap_total total = {.vss = 0, .pss = 0};
 	struct rb_node *n;
 
 	mutex_lock(&client->lock);
@@ -1698,11 +1703,15 @@ static size_t ion_debug_heap_total(struct ion_client *client,
 		struct ion_handle *handle = rb_entry(n,
 						     struct ion_handle,
 						     node);
-		if (handle->buffer->heap->id == id)
-			size += handle->buffer->size;
+		if (handle->buffer->heap->id == id) {
+			int handle_count = handle->buffer->handle_count;
+			if (handle_count)
+				total.pss += handle->buffer->size / handle_count;
+			total.vss += handle->buffer->size;
+		}
 	}
 	mutex_unlock(&client->lock);
-	return size;
+	return total;
 }
 
 /**
@@ -1813,26 +1822,26 @@ static int ion_debug_heap_show(struct seq_file *s, void *unused)
 	size_t total_size = 0;
 	size_t total_orphaned_size = 0;
 
-	seq_printf(s, "%16s %16s %16s\n", "client", "pid", "size");
+	seq_printf(s, "%16s %16s %16s %16s\n", "client", "pid", "size(PSS)", "size(VSS)");
 	seq_puts(s, "----------------------------------------------------\n");
 
 	mutex_lock(&debugfs_mutex);
 	for (n = rb_first(&dev->clients); n; n = rb_next(n)) {
 		struct ion_client *client = rb_entry(n, struct ion_client,
 						     node);
-		size_t size = ion_debug_heap_total(client, heap->id);
+		struct ion_heap_total total = ion_debug_heap_total(client, heap->id);
 
-		if (!size)
+		if (!total.vss)
 			continue;
 		if (client->task) {
 			char task_comm[TASK_COMM_LEN];
 
 			get_task_comm(task_comm, client->task);
-			seq_printf(s, "%16s %16u %16zu\n", task_comm,
-				   client->pid, size);
+			seq_printf(s, "%16s %16u %16zu %16zu\n", task_comm,
+				   client->pid, total.pss, total.vss);
 		} else {
-			seq_printf(s, "%16s %16u %16zu\n", client->name,
-				   client->pid, size);
+			seq_printf(s, "%16s %16u %16zu %16zu\n", client->name,
+				   client->pid, total.pss, total.vss);
 		}
 	}
 	mutex_unlock(&debugfs_mutex);

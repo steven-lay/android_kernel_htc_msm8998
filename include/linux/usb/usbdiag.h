@@ -23,10 +23,57 @@
 
 #include <linux/err.h>
 
+/*DRIVER_DIAG_FUNCTION*/
+#define DIAG_ERR(fmt, args...) \
+	printk(KERN_ERR "[USBDIAG:ERR] " fmt, ## args)
+#define DIAG_WARNING(fmt, args...) \
+	printk(KERN_WARNING "[USBDIAG] " fmt, ## args)
+#define DIAG_INFO(fmt, args...) \
+	printk(KERN_INFO "[USBDIAG] " fmt, ## args)
+#define DIAG_DBUG(fmt, args...) \
+	do { \
+		if (diag7k_debug_mask) \
+			printk(KERN_INFO "[USBDIAG] " fmt, ## args); \
+		else \
+			pr_debug("[USBDIAG] " fmt, ## args); \
+	} while (0)
+
+/*DRIVER_DIAGFWD_FUNCTION*/
+#define DIAGFWD_ERR(fmt, args...) \
+	printk(KERN_ERR "[DIAGFWD:ERR] " fmt, ## args)
+#define DIAGFWD_WARNING(fmt, args...) \
+	printk(KERN_WARNING "[DIAGFWD] " fmt, ## args)
+#define DIAGFWD_INFO(fmt, args...) \
+	printk(KERN_INFO "[DIAGFWD] " fmt, ## args)
+#define DIAGFWD_DBUG(fmt, args...) \
+	do { \
+		if (diag7k_debug_mask) \
+			printk(KERN_INFO "[DIAGFWD] " fmt, ## args); \
+		else \
+			pr_debug("[DIAGFWD] " fmt, ## args); \
+	} while (0)
+
+/* DRIVER_SDLOG_FUNCTION*/
+#define SDLOG_ERR(fmt, args...) \
+	printk(KERN_ERR "[DIAGSDLOG:ERR] " fmt, ## args)
+#define SDLOG_WARNING(fmt, args...) \
+	printk(KERN_WARNING "[DIAGSDLOG] " fmt, ## args)
+#define SDLOG_INFO(fmt, args...) \
+	printk(KERN_INFO "[DIAGSDLOG] " fmt, ## args)
+#define SDLOG_DBUG(fmt, args...) \
+	do { \
+		if (diag7k_debug_mask) \
+			printk(KERN_INFO "[DIAGSDLOG] " fmt, ## args); \
+		else \
+			pr_debug("[DIAGSDLOG] " fmt, ## args); \
+	} while (0)
+
 #define DIAG_LEGACY		"diag"
 #define DIAG_MDM		"diag_mdm"
 #define DIAG_QSC		"diag_qsc"
 #define DIAG_MDM2		"diag_mdm2"
+
+#define DIAG_XPST		1
 
 #define USB_DIAG_CONNECT	0
 #define USB_DIAG_DISCONNECT	1

@@ -92,7 +92,7 @@ static int mhi_ch_open(struct diag_mhi_ch_t *ch)
 		return -EINVAL;
 
 	if (atomic_read(&ch->opened)) {
-		pr_debug("diag: In %s, channel is already opened, id: %d\n",
+		DIAGFWD_DBUG("diag: In %s, channel is already opened, id: %d\n",
 			 __func__, ch->type);
 		return 0;
 	}
@@ -391,7 +391,7 @@ static void mhi_read_done_work_fn(struct work_struct *work)
 			break;
 		err = mhi_poll_inbound(mhi_info->read_ch.hdl, &result);
 		if (err) {
-			pr_debug("diag: In %s, err %d\n", __func__, err);
+			DIAGFWD_DBUG("diag: In %s, err %d\n", __func__, err);
 			break;
 		}
 		buf = result.buf_addr;

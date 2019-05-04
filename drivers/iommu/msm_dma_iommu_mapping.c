@@ -210,6 +210,7 @@ static inline int __msm_dma_map_sg(struct device *dev, struct scatterlist *sg,
 		iommu_map->sgl.dma_address = sg->dma_address;
 		iommu_map->sgl.dma_length = sg->dma_length;
 		iommu_map->dev = dev;
+		iommu_map->dir = dir;
 		msm_iommu_add(iommu_meta, iommu_map);
 
 	} else {

@@ -279,6 +279,13 @@
 		qcom,sleep-stats-version = <2>;
 	};
 
+	qcom,rpm-stats@2a1fa0 {
+		compatible = "qcom,rpm-stats";
+		reg = <0x2a1fa0 0x60>;
+		reg-names = "phys_addr_base";
+		qcom,sleep-stats-version = <3>;
+	};
+
 	qcom,rpm-rail-stats@200000 {
 		compatible = "qcom,rpm-rail-stats";
 		reg = <0x200000 0x100>,
@@ -339,7 +346,7 @@
 
 		qcom,gic-parent = <&intc>;
 		qcom,gic-map =
-			<0x1f 212>, /* usb30_power_event_irq	*/
+			<0x31 212>, /* usb30_power_event_irq	*/
 			<0x2 216>, /* tsens1_upper_lower_int	*/
 			<0x34 275>, /* qmp_usb3_lfps_rxterm_irq_cx	*/
 			<0x57 358>, /*  spmi_periph_irq[0]	*/

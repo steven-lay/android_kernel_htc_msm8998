@@ -63,3 +63,7 @@ obj-$(CONFIG_USB_COMMON)	+= common/
 obj-$(CONFIG_USBIP_CORE)	+= usbip/
 
 obj-$(CONFIG_USB_PD)		+= pd/
+
+obj-$(CONFIG_TUSB1044)		+= tusb1044/
+
+obj-$(CONFIG_TPS61099)		+= tps61099/

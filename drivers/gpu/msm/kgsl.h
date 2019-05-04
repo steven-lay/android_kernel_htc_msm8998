@@ -47,7 +47,6 @@
 
 #define kgsl_drawobj_profiling_buffer kgsl_cmdbatch_profiling_buffer
 
-
 /* The number of memstore arrays limits the number of contexts allowed.
  * If more contexts are needed, update multiple for MEMSTORE_SIZE
  */

@@ -5,3 +5,8 @@ config MSM_TZ_LOG
           This option enables a driver with a debugfs interface for messages
           produced by the Secure code (Trust zone). These messages provide
           diagnostic information about TZ operation.
+
+config HTC_TZ_LOG
+       tristate "HTC MSM Trust Zone (TZ) Log"
+       depends on MSM_TZ_LOG
+       default y

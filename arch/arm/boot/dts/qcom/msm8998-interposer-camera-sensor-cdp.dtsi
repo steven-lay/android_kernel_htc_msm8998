@@ -45,20 +45,20 @@
 	led_flash0: qcom,camera-flash@0 {
 		cell-index = <0>;
 		compatible = "qcom,camera-flash";
-		qcom,flash-source = <&pm660l_flash0 &pm660l_flash1>;
-		qcom,torch-source = <&pm660l_torch0 &pm660l_torch1>;
+		qcom,flash-source = <&pm660l_flash0 /*&pm660l_flash1*/>;
+		qcom,torch-source = <&pm660l_torch0 /*&pm660l_torch1*/>;
 		qcom,switch-source = <&pm660l_switch0>;
 		status = "ok";
 	};
 
-	led_flash1: qcom,camera-flash@1 {
+/*	led_flash1: qcom,camera-flash@1 {
 		cell-index = <1>;
 		compatible = "qcom,camera-flash";
 		qcom,flash-source = <&pm660l_flash2>;
 		qcom,torch-source = <&pm660l_torch2>;
 		qcom,switch-source = <&pm660l_switch1>;
 		status = "ok";
-	};
+	};*/
 
 	qcom,csiphy@ca34000 {
 		qcom,clock-rates = <0 0 0 0 0 0 384000000 0 0 269333333 0
@@ -383,7 +383,7 @@
 		qcom,csid-sd-index = <2>;
 		qcom,mount-angle = <90>;
 		qcom,actuator-src = <&actuator1>;
-		qcom,led-flash-src = <&led_flash1>;
+//		qcom,led-flash-src = <&led_flash1>;
 		qcom,eeprom-src = <&eeprom2>;
 		cam_vio-supply = <&pm660_l11>;
 		cam_vana-supply = <&pm660l_bob>;

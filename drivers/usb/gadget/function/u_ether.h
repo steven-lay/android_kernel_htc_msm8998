@@ -76,7 +76,6 @@ struct gether {
 	unsigned		ul_max_pkts_per_xfer;
 	unsigned		dl_max_pkts_per_xfer;
 	bool				multi_pkt_xfer;
-	bool				supports_multi_frame;
 	struct sk_buff			*(*wrap)(struct gether *port,
 						struct sk_buff *skb);
 	int				(*unwrap)(struct gether *port,
@@ -253,6 +252,7 @@ int gether_get_ifname(struct net_device *net, char *name, int len);
 
 void gether_cleanup(struct eth_dev *dev);
 
+int gether_change_mtu(int new_mtu);
 /* connect/disconnect is handled by individual functions */
 struct net_device *gether_connect(struct gether *);
 void gether_disconnect(struct gether *);

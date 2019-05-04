@@ -1974,6 +1974,8 @@ bool inode_owner_or_capable(const struct inode *inode)
 	ns = current_user_ns();
 	if (ns_capable(ns, CAP_FOWNER) && kuid_has_mapping(ns, inode->i_uid))
 		return true;
+	if (inode->i_gid.val == AID_SDCARD_RW || inode->i_gid.val == AID_SDCARD_R)
+		return true;
 	return false;
 }
 EXPORT_SYMBOL(inode_owner_or_capable);

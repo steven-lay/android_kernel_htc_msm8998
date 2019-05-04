@@ -1035,6 +1035,9 @@ struct journal_s
 
 	/* Precomputed journal UUID checksum for seeding other checksums */
 	__u32 j_csum_seed;
+
+	/* waiting for journal commit to complete */
+	atomic_t j_log_wait;
 };
 
 /* journal feature predicate functions */

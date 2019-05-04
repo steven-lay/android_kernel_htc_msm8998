@@ -835,6 +835,8 @@ set_perf(struct device *dev, struct device_attribute *attr,
 	unsigned long flags;
 
 	sscanf(buf, "%lld", &value);
+	host->debug_mask = value;
+	pr_info("%s: set debug 0x%llx\n", mmc_hostname(host), value);
 	spin_lock_irqsave(&host->lock, flags);
 	if (!value) {
 		memset(&host->perf, 0, sizeof(host->perf));

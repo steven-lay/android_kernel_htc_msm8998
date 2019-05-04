@@ -19,6 +19,13 @@
 #include <linux/pwm.h>
 #include <linux/regulator/consumer.h>
 
+/* HTC ADD */
+#include <linux/regmap.h>
+#include <linux/htc_flashlight.h>
+#include <linux/of_gpio.h>
+#include <linux/delay.h>
+#include <linux/fb.h>
+
 /* LP8550/1/2/3/6 Registers */
 #define LP855X_BRIGHTNESS_CTRL		0x00
 #define LP855X_DEVICE_CTRL		0x01
@@ -42,12 +49,51 @@
 #define DEFAULT_BL_NAME		"lcd-backlight"
 #define MAX_BRIGHTNESS		255
 
+/* HTC ADD */
+#define MAX_BRIGHTNESS_12BIT				4095
+#define MAX_CURRENT_20MA					0x30
+#define MAX_CURRENT_30MA					0x60
+#define LP8556_BACKLIGHT_12BIT_LSB_MASK		0xFF
+#define LP8556_BACKLIGHT_12BIT_MSB_MASK		0x0F
+#define LP8556_BACKLIGHT_12BIT_MSB_SHIFT	8
+#define LP8556_MAX_CURRENT_MASK				(BIT(4) | BIT(5) | BIT(6))
+#define LP8556_CFG1_REG						0xA1
+#define LP8556_FULLBRIGHT_LSB_REG			0x10
+#define LP8556_FULLBRIGHT_MSB_REG			0x11
+#define LP8556_MAX_REGISTER					0xAF
+
+#define FLASH_MODE_BRIGHTNESS				4095
+#define FLASH_MODE_MAX_DURATION_MS			500
+#define TORCH_MODE_MAX_DURATION_MS			10000
+
+static int current_fb_status = FB_BLANK_UNBLANK;
+
 enum lp855x_brightness_ctrl_mode {
 	PWM_BASED = 1,
 	REGISTER_BASED,
 };
 
+enum lp855x_power_control_action{
+	NORMAL_POWER_ON,
+	NORMAL_POWER_OFF,
+	AOD_POWER_ON,
+	AOD_ENABLE,
+	ADO_DISABLE,
+};
+
 struct lp855x;
+
+/* HTC ADD  regcmd function struct*/
+struct lp855x_regcmd{
+	unsigned int address;
+	unsigned int parameter1;
+};
+
+struct lp855x_regcmd_sets{
+	int reg_cmds_num;
+	struct lp855x_regcmd *reg_cmds;
+	struct regmap *regmap;
+};
 
 /*
  * struct lp855x_device_config
@@ -74,7 +120,121 @@ struct lp855x {
 	struct lp855x_platform_data *pdata;
 	struct pwm_device *pwm;
 	struct regulator *supply;	/* regulator for VDD input */
+
+	/* HTC ADD */
+	struct regmap *regmap;
+	struct delayed_work flash_work;
+	bool flash_enabled;
+	struct htc_flashlight_dev flash_dev;
+	int torch_brightness;
+	int gpio;
+	bool gpio_enabled;
+	struct notifier_block lp855x_fb_notif;
+	struct lp855x_regcmd_sets power_on_cmd_sets;
+	struct lp855x_regcmd_sets aod_power_on_cmd_sets;
+	struct lp855x_regcmd_sets aod_enable_cmd_sets;
+	struct lp855x_regcmd_sets aod_disable_cmd_sets;
 };
+
+
+/* HTC ADD regcmd function --- start*/
+static void lp855x_exec_cmds(struct regmap *regmap, struct lp855x_regcmd *cmds, int num)
+{
+	int i = 0, ret = 0;
+	struct lp855x_regcmd *m_cmd = cmds;
+
+
+	if (!regmap){
+		pr_err("%s, regmap is NULL  \n", __func__);
+		return ;
+	}
+
+	if (!cmds){
+		pr_err("%s, regcmd is NULL  \n", __func__);
+		return ;
+	}
+
+	for (i=0; i<num; i++){
+		ret = regmap_write(regmap, m_cmd->address, m_cmd->parameter1);
+		if (ret){
+			pr_err("%s: I2C write NG:address: %x, parameter1: %x\n", __func__, m_cmd->address, m_cmd->parameter1);
+		}else{
+			pr_debug("%s: I2C write OK:address: %x, parameter1: %x\n", __func__, m_cmd->address, m_cmd->parameter1);
+		}
+		m_cmd++;
+	}
+}
+
+static struct lp855x_regcmd *lp855x_parse_dt_reg_cmds(struct device *dev, const char *cmd_key, int *cmd_num)
+{
+
+	const char *data;
+	struct lp855x_regcmd *m_cmds, *p_cmd;
+	unsigned char *buf, *ptr_buf;
+	int blen = 0, sets, i;
+
+	data = of_get_property(dev->of_node, cmd_key, &blen);
+	if (!data) {
+		pr_err("%s: failed, key=%s\n", __func__, cmd_key);
+		return NULL;
+	}
+
+	ptr_buf= buf = kzalloc(sizeof(char) * blen, GFP_KERNEL);
+		if (!buf)
+			return NULL;
+
+	memcpy(buf, data, blen);
+
+	sets = blen/2;
+	m_cmds = devm_kzalloc(dev,sizeof(*m_cmds) * sets, GFP_KERNEL);
+	if (!m_cmds)
+		goto error;
+
+	p_cmd = m_cmds;
+	for (i=0;i<sets;i++){
+		p_cmd->address = *ptr_buf++;
+		p_cmd->parameter1 = *ptr_buf++;
+		pr_err("%s ,parse cmd-> address:%x , parameter1:%x\n", __func__, p_cmd->address, p_cmd->parameter1);
+		p_cmd++;
+	}
+
+	*cmd_num = sets;
+
+	kfree(buf);
+	return m_cmds;
+
+error:
+	kfree(buf);
+	return NULL;
+}
+
+static void lp855x_parse_dt_reg_cmd_sets(struct device *dev, struct lp855x_regcmd_sets *cmd_sets, struct regmap *regmap, const char *cmd_key)
+{
+
+	if (!cmd_sets){
+		dev_err(dev, "%s: cmd_sets is null \n", __func__);
+		return ;
+	}
+
+	if (!regmap){
+		dev_err(dev, "%s: regmap is null \n", __func__);
+		return ;
+	}
+
+	cmd_sets->regmap = regmap;
+	cmd_sets->reg_cmds = lp855x_parse_dt_reg_cmds(dev, cmd_key, &cmd_sets->reg_cmds_num);
+
+}
+
+static void lp855x_run_power_on_cmds(struct lp855x_regcmd_sets *cmd_sets)
+{
+	if (cmd_sets){
+		if (cmd_sets->reg_cmds_num && cmd_sets->reg_cmds){
+			lp855x_exec_cmds(cmd_sets->regmap, cmd_sets->reg_cmds, cmd_sets->reg_cmds_num);
+		}
+	}
+}
+/* HTC ADD regcmd function --- end*/
 
 static int lp855x_write_byte(struct lp855x *lp, u8 reg, u8 data)
 {
@@ -255,18 +415,311 @@ static void lp855x_pwm_ctrl(struct lp855x *lp, int br, int max_br)
 		pwm_disable(lp->pwm);
 }
 
+
+/* HTC Implmenetation */
+static int lp8556_backlight_update_brightness_register(struct lp855x *lp, int brightness)
+{
+	int ret;
+	struct regmap *regmap = lp->regmap;
+	u8 val, max_current;
+
+	if (lp->bl->props.max_brightness == MAX_BRIGHTNESS_12BIT)
+	{
+		if (brightness == MAX_BRIGHTNESS_12BIT)
+			max_current = MAX_CURRENT_30MA; //Set maximum LED current to 30mA
+		else
+			max_current = MAX_CURRENT_20MA; //Set maximum LED current to 20mA
+
+		ret = regmap_update_bits(regmap, LP8556_CFG1_REG, LP8556_MAX_CURRENT_MASK, max_current);
+
+		if (ret)
+			return ret;
+
+		val = brightness & LP8556_BACKLIGHT_12BIT_LSB_MASK;
+		ret = regmap_write(regmap, LP8556_FULLBRIGHT_LSB_REG, val);
+
+		if (ret)
+			return ret;
+
+		val = (brightness >> LP8556_BACKLIGHT_12BIT_MSB_SHIFT) & LP8556_BACKLIGHT_12BIT_MSB_MASK;
+		ret = regmap_write(regmap, LP8556_FULLBRIGHT_MSB_REG, val);
+
+	}
+	else
+	{
+		val = brightness & 0xFF;
+		ret = regmap_write(regmap, LP855X_BRIGHTNESS_CTRL, val);
+	}
+
+	return ret;
+}
+
+static int lp855x_flash_en_locked(struct lp855x *lp, int en, int duration, int level)
+{
+	int rc = 0;
+
+	if (en)
+	{
+		if (lp->flash_enabled)
+		{
+			pr_info("%s: already enabled\n", __func__);
+			rc = -EBUSY;
+			goto exit;
+		}
+
+		if (level <= 0 || level > lp->bl->props.max_brightness)
+			level = lp->bl->props.max_brightness;
+
+		if (duration < 10)
+			duration = 10;
+
+		schedule_delayed_work(&lp->flash_work, msecs_to_jiffies(duration));
+	}
+	else
+	{
+		level = lp->bl->props.brightness;
+	}
+
+	pr_info("%s: (%d, %d) [level=%d]\n", __func__, en, duration, level);
+
+	rc = lp8556_backlight_update_brightness_register(lp, level);
+
+	lp->flash_enabled = en;
+exit:
+	pr_info("%s: (%d, %d) done, rc=%d\n", __func__, en, duration, rc);
+
+	return rc;
+}
+
+static int lp855x_flash_en(struct lp855x *lp, int en, int duration, int level)
+{
+	int rc = 0;
+
+	if (!en) {
+		cancel_delayed_work_sync(&lp->flash_work);
+	}
+
+	mutex_lock(&lp->bl->update_lock);
+	rc = lp855x_flash_en_locked(lp, en, duration, level);
+	mutex_unlock(&lp->bl->update_lock);
+
+	return rc;
+}
+
+static void lp855x_flash_off_work(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct lp855x *lp = container_of(dwork, struct lp855x, flash_work);
+
+	mutex_lock(&lp->bl->update_lock);
+	lp855x_flash_en_locked(lp, 0, 0, 0);
+	mutex_unlock(&lp->bl->update_lock);
+}
+
+static int lp855x_flash_mode(struct htc_flashlight_dev *fl_dev, int mode1, int mode2)
+{
+	struct lp855x *lp = container_of(fl_dev, struct lp855x, flash_dev);
+
+	return lp855x_flash_en(lp, mode1, FLASH_MODE_MAX_DURATION_MS, FLASH_MODE_BRIGHTNESS);
+}
+
+static int lp855x_torch_mode(struct htc_flashlight_dev *fl_dev, int mode1, int mode2)
+{
+	struct lp855x *lp = container_of(fl_dev, struct lp855x, flash_dev);
+
+	return lp855x_flash_en(lp, mode1, TORCH_MODE_MAX_DURATION_MS, lp->torch_brightness);
+}
+
+static ssize_t lp855x_get_flash_en(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct lp855x *lp = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", lp->flash_enabled);
+}
+
+static ssize_t lp855x_set_flash_en(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct lp855x *lp = dev_get_drvdata(dev);
+	int data = 0, level = 0, rc = 0;
+
+	if (sscanf(buf, "%d %d", &data, &level) < 1)
+		return -EINVAL;
+
+	rc = lp855x_flash_en(lp, !!data, data, level);
+
+	if (rc)
+		return rc;
+
+	return count;
+}
+static DEVICE_ATTR(flash_en, (S_IRUGO | S_IWUSR | S_IWGRP),
+	lp855x_get_flash_en, lp855x_set_flash_en);
+static struct attribute *lp855x_flash_attributes[] = {
+	&dev_attr_flash_en.attr,
+	NULL,
+};
+
+static const struct attribute_group lp855x_flash_attr_group = {
+	.attrs = lp855x_flash_attributes,
+};
+
+/* HTC Implmenetation End */
+static void lp855x_enable_control(struct lp855x *lp, int enabled){
+
+	if(enabled){
+	/* resume flow */
+		if (gpio_is_valid(lp->gpio)){
+			gpio_set_value(lp->gpio, 1);
+			lp->gpio_enabled = 1;
+			pr_debug("%s gpio:%d set value:%d\n", __func__, lp->gpio, 1);
+		}
+	}else{
+	/* suspend flow */
+		if (gpio_is_valid(lp->gpio)){
+			gpio_set_value(lp->gpio, 0);
+			lp->gpio_enabled = 0;
+			pr_debug("%s gpio:%d set value:%d\n", __func__, lp->gpio, 0);
+		}
+	}
+
+}
+
+
+
+static void lp855x_fb_status_update(struct lp855x *lp, int next_fb_event)
+{
+	int lp855x_power_action = NORMAL_POWER_ON;
+
+	pr_debug("%s current_fb_status:%d, next_fb_event:%d\n", __func__,current_fb_status, next_fb_event);
+
+	if (next_fb_event == FB_BLANK_VSYNC_SUSPEND){
+		/* bl power status should be the same as panel.
+		Currently, FB_BLANK_NORMAL / FB_BLANK_VSYNC_SUSPEND
+		keep panel power on and go to same call flow*/
+		next_fb_event = FB_BLANK_NORMAL;
+	}
+
+	if (next_fb_event != FB_BLANK_NORMAL &&
+		next_fb_event != FB_BLANK_UNBLANK &&
+		next_fb_event != FB_BLANK_POWERDOWN){
+		pr_err("%s : no supported fb event:%d \n", __func__, next_fb_event);
+		return;
+	}
+
+
+	if (next_fb_event == current_fb_status){
+		return;
+	}
+
+	switch (current_fb_status){
+		case FB_BLANK_POWERDOWN:
+
+			if (next_fb_event == FB_BLANK_NORMAL){
+				lp855x_power_action = AOD_POWER_ON;
+			}else if (next_fb_event == FB_BLANK_UNBLANK){
+				lp855x_power_action = NORMAL_POWER_ON;
+			}
+
+			break;
+
+		case FB_BLANK_NORMAL:
+
+			if (next_fb_event == FB_BLANK_POWERDOWN){
+				lp855x_power_action = NORMAL_POWER_OFF;
+			}else if (next_fb_event == FB_BLANK_UNBLANK){
+				lp855x_power_action = ADO_DISABLE;
+			}
+
+			break;
+		case FB_BLANK_UNBLANK:
+
+			if (next_fb_event == FB_BLANK_POWERDOWN){
+				lp855x_power_action = NORMAL_POWER_OFF;
+			}else if (next_fb_event == FB_BLANK_NORMAL){
+				lp855x_power_action = AOD_ENABLE;
+			}
+
+			break;
+	}
+
+	current_fb_status = next_fb_event;
+
+	/* base on power action to control power and resend initial code */
+	switch (lp855x_power_action){
+		case NORMAL_POWER_ON:
+			pr_debug("%s power action: NORMAL_POWER_ON\n", __func__);
+			lp855x_enable_control(lp, 1);
+			usleep_range(1000, 1500);
+			lp855x_run_power_on_cmds(&lp->power_on_cmd_sets);
+			break;
+		case NORMAL_POWER_OFF:
+			pr_debug("%s power action: NORMAL_POWER_OFF\n", __func__);
+			lp855x_enable_control(lp, 0);
+			break;
+		case AOD_POWER_ON:
+			pr_debug("%s power action: AOD_POWER_ON\n", __func__);
+			lp855x_enable_control(lp, 1);
+			usleep_range(1000, 1500);
+			lp855x_run_power_on_cmds(&lp->aod_power_on_cmd_sets);
+			break;
+		case AOD_ENABLE:
+			pr_debug("%s power action: AOD_ENABLE\n", __func__);
+			lp855x_run_power_on_cmds(&lp->aod_enable_cmd_sets);
+			break;
+		case ADO_DISABLE:
+			pr_debug("%s power action: ADO_DISABLE\n", __func__);
+			lp855x_run_power_on_cmds(&lp->aod_disable_cmd_sets);
+			break;
+	}
+
+}
+
+
 static int lp855x_bl_update_status(struct backlight_device *bl)
 {
 	struct lp855x *lp = bl_get_data(bl);
 	int brightness = bl->props.brightness;
+	int ret = 0;
 
-	if (bl->props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK))
-		brightness = 0;
+
+	if (!lp->gpio_enabled){
+		pr_debug("%s ignore this update due to gpio is not enabled\n", __func__);
+		return ret;
+	}
+
+	if(lp->flash_enabled)
+		return -EBUSY;
 
 	if (lp->mode == PWM_BASED)
 		lp855x_pwm_ctrl(lp, brightness, bl->props.max_brightness);
-	else if (lp->mode == REGISTER_BASED)
+	else if (lp->mode == REGISTER_BASED && lp->chip_id == LP8556)
+		ret = lp8556_backlight_update_brightness_register(lp, brightness);
+	else
 		lp855x_write_byte(lp, lp->cfg->reg_brightness, (u8)brightness);
+	return ret;
+}
+
+
+static int fb_notifier_callback(struct notifier_block *self,
+				 unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	struct lp855x *lp = NULL;
+	int node = evdata->info->node;
+	int fb_blank = 0;
+
+	/* Only listen FB_EVENT_BLANK from fb 0 */
+	if (event != FB_EVENT_BLANK || node != 0)
+		return 0;
+
+	lp = container_of(self, struct lp855x, lp855x_fb_notif);
+	fb_blank = *(int *)evdata->data;
+
+	lp855x_fb_status_update(lp, fb_blank);
+
+	lp855x_bl_update_status(lp->bl);
 
 	return 0;
 }
@@ -285,7 +738,11 @@ static int lp855x_backlight_register(struct lp855x *lp)
 
 	memset(&props, 0, sizeof(props));
 	props.type = BACKLIGHT_PLATFORM;
-	props.max_brightness = MAX_BRIGHTNESS;
+
+	if (lp->chip_id == LP8556)
+		props.max_brightness = MAX_BRIGHTNESS_12BIT;
+	else
+		props.max_brightness = MAX_BRIGHTNESS;
 
 	if (pdata->initial_brightness > props.max_brightness)
 		pdata->initial_brightness = props.max_brightness;
@@ -358,6 +815,16 @@ static int lp855x_parse_dt(struct lp855x *lp)
 	of_property_read_u8(node, "dev-ctrl", &pdata->device_control);
 	of_property_read_u8(node, "init-brt", &pdata->initial_brightness);
 	of_property_read_u32(node, "pwm-period", &pdata->period_ns);
+	/*HTC ADD*/
+	of_property_read_u32(node, "torch-brt", &lp->torch_brightness);
+	/* parse enable gpio */
+	lp->gpio = of_get_named_gpio(node, "enable-gpios", 0);
+	if(gpio_is_valid(lp->gpio)){
+		if (!gpio_get_value(lp->gpio)){
+			gpio_set_value(lp->gpio, 1);
+		}
+		lp->gpio_enabled = 1;
+	}
 
 	/* Fill ROM platform data if defined */
 	rom_length = of_get_child_count(node);
@@ -394,6 +861,7 @@ static int lp855x_parse_dt(struct lp855x *lp)
 static int lp855x_probe(struct i2c_client *cl, const struct i2c_device_id *id)
 {
 	struct lp855x *lp;
+	struct regmap_config regmap_cfg;
 	int ret;
 
 	if (!i2c_check_functionality(cl->adapter, I2C_FUNC_SMBUS_I2C_BLOCK))
@@ -435,6 +903,25 @@ static int lp855x_probe(struct i2c_client *cl, const struct i2c_device_id *id)
 		}
 	}
 
+	/* Setup regmap */
+	memset(&regmap_cfg, 0, sizeof(struct regmap_config));
+	regmap_cfg.reg_bits = 8;
+	regmap_cfg.val_bits = 8;
+	regmap_cfg.name = id->name;
+	regmap_cfg.max_register = LP8556_MAX_REGISTER;
+
+	lp->regmap = devm_regmap_init_i2c(cl, &regmap_cfg);
+
+	if (IS_ERR(lp->regmap))
+	{
+		return PTR_ERR(lp->regmap);
+	}
+
+	lp855x_parse_dt_reg_cmd_sets(lp->dev, &lp->power_on_cmd_sets, lp->regmap, "normal-power-on-cmds");
+	lp855x_parse_dt_reg_cmd_sets(lp->dev, &lp->aod_power_on_cmd_sets, lp->regmap, "aod-power-on-cmds");
+	lp855x_parse_dt_reg_cmd_sets(lp->dev, &lp->aod_enable_cmd_sets, lp->regmap, "aod-enable-cmds");
+	lp855x_parse_dt_reg_cmd_sets(lp->dev, &lp->aod_disable_cmd_sets, lp->regmap, "aod-disable-cmds");
+
 	i2c_set_clientdata(cl, lp);
 
 	ret = lp855x_configure(lp);
@@ -456,7 +943,33 @@ static int lp855x_probe(struct i2c_client *cl, const struct i2c_device_id *id)
 		return ret;
 	}
 
+
 	backlight_update_status(lp->bl);
+
+	lp->lp855x_fb_notif.notifier_call = fb_notifier_callback;
+
+	fb_register_client(&lp->lp855x_fb_notif);
+
+	if(lp->torch_brightness != 0)
+	{
+		INIT_DELAYED_WORK(&lp->flash_work, lp855x_flash_off_work);
+		lp->flash_dev.id = 1;
+		lp->flash_dev.flash_func = lp855x_flash_mode;
+		lp->flash_dev.torch_func = lp855x_torch_mode;
+
+		if (register_htc_flashlight(&lp->flash_dev))
+		{
+			pr_err("%s: register htc_flashlight failed!\n", __func__);
+			lp->flash_dev.id = -1;
+		}
+		else
+		{
+			ret = sysfs_create_group(&lp->bl->dev.kobj, &lp855x_flash_attr_group);
+			dev_info(lp->dev, "create flash attrs, ret=%d\n", ret);
+		}
+	}
+
+
 	return 0;
 }
 
@@ -470,6 +983,15 @@ static int lp855x_remove(struct i2c_client *cl)
 		regulator_disable(lp->supply);
 	sysfs_remove_group(&lp->dev->kobj, &lp855x_attr_group);
 
+	fb_unregister_client(&lp->lp855x_fb_notif);
+
+	if(lp->torch_brightness != 0)
+	{
+		sysfs_remove_group(&lp->bl->dev.kobj, &lp855x_flash_attr_group);
+		unregister_htc_flashlight(&lp->flash_dev);
+		lp->torch_brightness = 0;
+		lp->flash_dev.id = -1;
+	}
 	return 0;
 }
 

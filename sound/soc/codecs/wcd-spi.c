@@ -521,7 +521,13 @@ static int wcd_spi_cmd_rdsr(struct spi_device *spi,
 	struct spi_transfer *tx_xfer = &wcd_spi->xfer2[0];
 	struct spi_transfer *rx_xfer = &wcd_spi->xfer2[1];
 	u8 rdsr_cmd;
+/* HTC_AUD_START Fix Klockwork */
+#if 0
 	u32 status;
+#else
+	u32 status = 0;
+#endif
+/* HTC_AUD_END */
 	int ret;
 
 	rdsr_cmd = WCD_SPI_CMD_RDSR;

@@ -23,6 +23,7 @@
 #include <linux/workqueue.h>
 
 #include <soc/qcom/subsystem_restart.h>
+#include <linux/workqueue.h> /* HTC_AUD */
 
 #define Q6_PIL_GET_DELAY_MS 100
 #define BOOT_CMD 1
@@ -49,6 +50,8 @@ static struct attribute *attrs[] = {
 static struct work_struct adsp_ldr_work;
 static struct platform_device *adsp_private;
 static void adsp_loader_unload(struct platform_device *pdev);
+static struct workqueue_struct *adsp_load_wq; /* HTC_AUD */
+struct delayed_work adsp_loader_work; /* HTC_AUD */
 
 static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 {
@@ -145,6 +148,10 @@ load_adsp:
 		return;
 	}
 fail:
+/* HTC_AUD_START */
+	if (adsp_load_wq)
+		queue_delayed_work(adsp_load_wq, &adsp_loader_work, msecs_to_jiffies(500));
+/* HTC_AUD_END */
 	dev_err(&pdev->dev, "%s: Q6 image loading failed\n", __func__);
 	return;
 }
@@ -165,9 +172,11 @@ static ssize_t adsp_boot_store(struct kobject *kobj,
 
 	if (boot == BOOT_CMD) {
 		pr_debug("%s: going to call adsp_loader_do\n", __func__);
+		cancel_delayed_work_sync(&adsp_loader_work); /* HTC_AUD */
 		adsp_loader_do(adsp_private);
 	} else if (boot == IMAGE_UNLOAD_CMD) {
 		pr_debug("%s: going to call adsp_unloader\n", __func__);
+		cancel_delayed_work_sync(&adsp_loader_work); /* HTC_AUD */
 		adsp_loader_unload(adsp_private);
 	}
 	return count;
@@ -270,9 +279,22 @@ static int adsp_loader_remove(struct platform_device *pdev)
 	return 0;
 }
 
+/* HTC_AUD_START */
+static void adsp_loader_func(struct work_struct *work)
+{
+	pr_info("%s: retry\n", __func__);
+	adsp_loader_do(adsp_private);
+}
+/* HTC_AUD_END */
+
 static int adsp_loader_probe(struct platform_device *pdev)
 {
 	int ret = adsp_loader_init_sysfs(pdev);
+
+	adsp_load_wq = create_workqueue("adsp loader queue"); /* HTC_AUD */
+
+	INIT_DELAYED_WORK(&adsp_loader_work, adsp_loader_func); /* HTC_AUD */
+
 	if (ret != 0) {
 		dev_err(&pdev->dev, "%s: Error in initing sysfs\n", __func__);
 		return ret;

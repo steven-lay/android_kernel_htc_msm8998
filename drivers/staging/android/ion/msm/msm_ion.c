@@ -157,6 +157,43 @@ int msm_ion_do_cache_op(struct ion_client *client, struct ion_handle *handle,
 }
 EXPORT_SYMBOL(msm_ion_do_cache_op);
 
+static atomic_t ion_alloc_mem_usages[ION_USAGE_MAX]
+			= {[0 ... ION_USAGE_MAX-1] = ATOMIC_INIT(0)};
+
+static inline atomic_t* ion_get_meminfo(const enum ion_heap_mem_usage usage)
+{
+	return (usage < ION_USAGE_MAX) ?
+			&ion_alloc_mem_usages[usage] : NULL;
+}
+
+void ion_alloc_inc_usage(const enum ion_heap_mem_usage usage,
+			 const size_t size)
+{
+	atomic_t * const ion_alloc_usage = ion_get_meminfo(usage);
+
+	if (ion_alloc_usage)
+		atomic_add(size, ion_alloc_usage);
+}
+EXPORT_SYMBOL(ion_alloc_inc_usage);
+
+void ion_alloc_dec_usage(const enum ion_heap_mem_usage usage,
+			 const size_t size)
+{
+	atomic_t * const ion_alloc_usage = ion_get_meminfo(usage);
+
+	if (ion_alloc_usage)
+		atomic_sub(size, ion_alloc_usage);
+}
+EXPORT_SYMBOL(ion_alloc_dec_usage);
+
+uintptr_t msm_ion_heap_meminfo(const bool is_total)
+{
+	atomic_t * const ion_alloc_usage = ion_get_meminfo(
+						is_total? ION_TOTAL : ION_IN_USE);
+	return ion_alloc_usage? atomic_read(ion_alloc_usage) * PAGE_SIZE : 0;
+}
+EXPORT_SYMBOL(msm_ion_heap_meminfo);
+
 int msm_ion_do_cache_offset_op(
 		struct ion_client *client, struct ion_handle *handle,
 		void *vaddr, unsigned int offset, unsigned long len,

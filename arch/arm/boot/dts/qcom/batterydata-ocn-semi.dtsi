@@ -1,0 +1,80 @@
+
+qcom,ocean-semi-batterydata {
+	qcom, = <23>;
+	/* #2711269_HTC_B2PZC100atl_3000mAh_averaged_MasterSlave_Dec28th2016*/
+	qcom,max-voltage-uv = <4400000>;
+	qcom,nom-batt-capacity-mah = <3000>;
+	qcom,batt-id-kohm = <10>;
+	qcom,battery-beta = <4360>;
+	qcom,battery-type = "ocean_semi";
+	qcom,checksum = <0x5B65>;
+	qcom,gui-version = "PMI8998GUI - 2.0.0.54";
+
+	qcom,fastchg-current-ma = <3000>;
+	qcom,fg-cc-cv-threshold-mv = <4390>;
+	qcom,fcc-mah = <3000>;
+
+	htc,batt_id = <3>;
+	htc,id_raw_min = <0>;
+	htc,id_raw_max = <14000>;
+
+	qcom,fg-profile-data = [
+		 A8 1F 77 05
+		 93 0A 27 06
+		 63 1D 76 ED
+		 37 0B 67 15
+		 27 18 6C 23
+		 F3 44 C0 53
+		 5B 00 00 00
+		 0E 00 00 00
+		 00 00 50 C5
+		 6E CD BA CA
+		 22 00 08 00
+		 85 EC 67 EA
+		 AD 06 46 F2
+		 FC 00 1B 13
+		 81 DD 24 32
+		 1E 06 09 20
+		 27 00 14 00
+		 A4 1C AB F2
+		 57 F3 B2 D2
+		 F3 1C 3A 02
+		 AF 0D 06 0A
+		 D8 1A A9 1A
+		 78 34 34 43
+		 7D 00 00 00
+		 13 00 00 00
+		 00 00 EB CC
+		 20 C2 D5 CA
+		 1C 00 00 00
+		 85 EC 67 EA
+		 09 F4 85 EA
+		 6F F5 84 02
+		 57 F4 DC 1A
+		 A5 33 CC FF
+		 07 10 00 00
+		 A2 0B 66 46
+		 1C 00 40 00
+		 85 01 0A FA
+		 FF 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+		 00 00 00 00
+	];
+};
+

@@ -1743,7 +1743,7 @@ decrypt_passphrase_encrypted_session_key(struct ecryptfs_auth_tok *auth_tok,
 	mutex_lock(tfm_mutex);
 	rc = crypto_blkcipher_setkey(
 		desc.tfm, auth_tok->token.password.session_key_encryption_key,
-		auth_tok->token.password.session_key_encryption_key_bytes);
+		crypt_stat->key_size > 32 ? 32 : crypt_stat->key_size);
 	if (unlikely(rc < 0)) {
 		mutex_unlock(tfm_mutex);
 		printk(KERN_ERR "Error setting key for crypto context\n");
@@ -2324,7 +2324,7 @@ write_tag_3_packet(char *dest, size_t *remaining_bytes,
 	}
 	mutex_lock(tfm_mutex);
 	rc = crypto_blkcipher_setkey(desc.tfm, session_key_encryption_key,
-		auth_tok->token.password.session_key_encryption_key_bytes);
+		crypt_stat->key_size > 32 ? 32 : crypt_stat->key_size);
 	if (rc < 0) {
 		mutex_unlock(tfm_mutex);
 		ecryptfs_printk(KERN_ERR, "Error setting key for crypto "

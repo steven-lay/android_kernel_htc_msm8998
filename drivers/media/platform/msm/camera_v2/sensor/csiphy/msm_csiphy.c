@@ -746,6 +746,13 @@ static int msm_csiphy_2phase_lane_config_v50(
 		}
 	}
 	msm_csiphy_cphy_irq_config(csiphy_dev, csiphy_params);
+	//HTC_START: QCT provides SW workaround to fix white line noise.
+	msm_camera_io_w(0x4, csiphybase + 0X24);
+	msm_camera_io_w(0x4, csiphybase + 0X224);
+	msm_camera_io_w(0x4, csiphybase + 0X424);
+	msm_camera_io_w(0x4, csiphybase + 0X624);
+	msm_camera_io_w(0x4, csiphybase + 0X724);
+	//HTC_END
 	return 0;
 }
 

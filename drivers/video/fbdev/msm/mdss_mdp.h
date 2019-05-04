@@ -56,8 +56,8 @@
 #define C1_B_Cb		1	/* B/Cb */
 #define C0_G_Y		0	/* G/luma */
 
-/* wait for at most 2 vsync for lowest refresh rate (24hz) */
-#define KOFF_TIMEOUT_MS 84
+/* wait for 1 second for unexpected irq missing */
+#define KOFF_TIMEOUT_MS 1000
 #define KOFF_TIMEOUT msecs_to_jiffies(KOFF_TIMEOUT_MS)
 
 #define OVERFETCH_DISABLE_TOP		BIT(0)
@@ -997,6 +997,10 @@ struct mdss_overlay_private {
 	u8 secure_transition_state;
 
 	bool cache_null_commit; /* Cache if preceding commit was NULL */
+
+	/* HTC ADD*/
+	void *splash_mem_vaddr;
+	dma_addr_t splash_mem_dma;
 };
 
 struct mdss_mdp_set_ot_params {

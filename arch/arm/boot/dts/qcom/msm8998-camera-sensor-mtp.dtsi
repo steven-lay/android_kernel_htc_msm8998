@@ -21,14 +21,14 @@
 		status = "ok";
 	};
 
-	led_flash1: qcom,camera-flash@1 {
+/*	led_flash1: qcom,camera-flash@1 {
 		cell-index = <1>;
 		compatible = "qcom,camera-flash";
 		qcom,flash-source = <&pmi8998_flash2>;
 		qcom,torch-source = <&pmi8998_torch2>;
 		qcom,switch-source = <&pmi8998_switch1>;
 		status = "ok";
-	};
+	};*/
 
 	actuator_regulator: gpio-regulator@0 {
 		compatible = "regulator-fixed";
@@ -92,7 +92,24 @@
 		qcom,gpio-req-tbl-flags = <0>;
 		qcom,gpio-req-tbl-label = "CAM_CE";
 	};
-
+	tof0:qcom,tof@0{
+		cell-index = <0>;
+		reg = <0x29>;
+		compatible = "st,stmvl53l0";
+		qcom,cci-master = <0>;
+		cam_cci-supply = <&pm8998_lvs1>;
+		cam_laser-supply = <&pmi8998_bob>;
+		qcom,cam-vreg-name = "cam_cci", "cam_laser";
+		qcom,cam-vreg-min-voltage = <0 0>;
+		qcom,cam-vreg-max-voltage = <0 3600000>;
+		pinctrl-names = "cam_default", "cam_suspend";
+		pinctrl-0 = <&cam_tof_active>;
+		pinctrl-1 = <&cam_tof_suspend>;
+		gpios = <&tlmm 27 0>, <&tlmm 126 0>;
+		qcom,gpio-req-tbl-num = <0 1>;
+		qcom,gpio-req-tbl-flags = <0 0>;
+		qcom,gpio-req-tbl-label = "CAM_TOF", "CAM_CE";
+	};
 	ois0: qcom,ois@0 {
 		cell-index = <0>;
 		reg = <0x0>;
@@ -171,7 +188,7 @@
 		pinctrl-1 = <&cam_sensor_mclk2_suspend
 				 &cam_sensor_rear2_suspend>;
 		gpios = <&tlmm 15 0>,
-			<&tlmm 9 0>,
+			/*<&tlmm 9 0>,*/
 			<&tlmm 8 0>;
 		qcom,gpio-reset = <1>;
 		qcom,gpio-vana = <2>;
@@ -275,7 +292,7 @@
 		clock-names = "cam_src_clk", "cam_clk";
 		qcom,clock-rates = <24000000 0>;
 	};
-
+/*
 	qcom,camera@1 {
 		cell-index = <1>;
 		compatible = "qcom,camera";
@@ -318,7 +335,7 @@
 		clock-names = "cam_src_clk", "cam_clk";
 		qcom,clock-rates = <24000000 0>;
 	};
-
+*/
 	qcom,camera@2 {
 		cell-index = <2>;
 		compatible = "qcom,camera";
@@ -327,7 +344,7 @@
 		qcom,csid-sd-index = <2>;
 		qcom,mount-angle = <90>;
 		qcom,eeprom-src = <&eeprom2>;
-		qcom,led-flash-src = <&led_flash1>;
+//		qcom,led-flash-src = <&led_flash1>;
 		qcom,actuator-src = <&actuator1>;
 		qcom,laserled-src = <&laserled0>;
 		cam_vio-supply = <&pm8998_lvs1>;

@@ -28,6 +28,7 @@
 #include <linux/debugfs.h>
 #include <linux/vmalloc.h>
 #include <asm/arch_timer.h>
+#include <soc/qcom/htc_util.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/trace_thermal.h>
@@ -138,8 +139,218 @@
 #define TSENS_PS_RED_CMD_SHIFT	0x14
 /* End TSENS_TM registers for 8996 */
 
+#define MPM2_TSENS_CTRL(n)		((n) + 0x4)
 #define TSENS_CTRL_ADDR(n)		(n)
 #define TSENS_EN			BIT(0)
+#define TSENS_SW_RST			BIT(1)
+#define TSENS_ADC_CLK_SEL		BIT(2)
+#define TSENS_SENSOR_SHIFT		3
+#define TSENS_62_5_MS_MEAS_PERIOD	1
+#define TSENS_312_5_MS_MEAS_PERIOD	2
+#define TSENS_MEAS_PERIOD_SHIFT		18
+
+#define TSENS_GLOBAL_CONFIG(n)		((n) + 0x34)
+#define TSENS_S0_MAIN_CONFIG(n)		((n) + 0x38)
+#define TSENS_SN_REMOTE_CONFIG(n)	((n) + 0x3c)
+
+#define TSENS_EEPROM(n)			((n) + 0xd0)
+#define TSENS_EEPROM_REDUNDANCY_SEL(n)	((n) + 0x444)
+#define TSENS_EEPROM_BACKUP_REGION(n)	((n) + 0x440)
+
+#define TSENS_MAIN_CALIB_ADDR_RANGE	6
+#define TSENS_BACKUP_CALIB_ADDR_RANGE	4
+
+#define TSENS_EEPROM_8X26_1(n)		((n) + 0x1c0)
+#define TSENS_EEPROM_8X26_2(n)		((n) + 0x444)
+#define TSENS_8X26_MAIN_CALIB_ADDR_RANGE	4
+
+#define TSENS_EEPROM_8X10_1(n)		((n) + 0x1a4)
+#define TSENS_EEPROM_8X10_1_OFFSET	8
+#define TSENS_EEPROM_8X10_2(n)		((n) + 0x1a8)
+#define TSENS_EEPROM_8X10_SPARE_1(n)	((n) + 0xd8)
+#define TSENS_EEPROM_8X10_SPARE_2(n)	((n) + 0xdc)
+
+#define TSENS_9900_EEPROM(n)			((n) + 0xd0)
+#define TSENS_9900_EEPROM_REDUNDANCY_SEL(n)	((n) + 0x1c4)
+#define TSENS_9900_EEPROM_BACKUP_REGION(n)	((n) + 0x450)
+#define TSENS_9900_CALIB_ADDR_RANGE	4
+
+#define TSENS_8939_EEPROM(n)			((n) + 0xa0)
+
+#define TSENS_8994_EEPROM(n)			((n) + 0xd0)
+#define TSENS_8994_EEPROM_REDUN_SEL(n)		((n) + 0x464)
+#define TSENS_REDUN_REGION1_EEPROM(n)		((n) + 0x1c0)
+#define TSENS_REDUN_REGION2_EEPROM(n)		((n) + 0x1c4)
+#define TSENS_REDUN_REGION3_EEPROM(n)		((n) + 0x1cc)
+#define TSENS_REDUN_REGION4_EEPROM(n)		((n) + 0x440)
+#define TSENS_REDUN_REGION5_EEPROM(n)		((n) + 0x444)
+
+/* TSENS calibration Mask data */
+#define TSENS_BASE1_MASK		0xff
+#define TSENS0_POINT1_MASK		0x3f00
+#define TSENS1_POINT1_MASK		0xfc000
+#define TSENS2_POINT1_MASK		0x3f00000
+#define TSENS3_POINT1_MASK		0xfc000000
+#define TSENS4_POINT1_MASK		0x3f
+#define TSENS5_POINT1_MASK		0xfc0
+#define TSENS6_POINT1_MASK		0x3f000
+#define TSENS7_POINT1_MASK		0xfc0000
+#define TSENS8_POINT1_MASK		0x3f000000
+#define TSENS8_POINT1_MASK_BACKUP	0x3f
+#define TSENS9_POINT1_MASK		0x3f
+#define TSENS9_POINT1_MASK_BACKUP	0xfc0
+#define TSENS10_POINT1_MASK		0xfc0
+#define TSENS10_POINT1_MASK_BACKUP	0x3f000
+#define TSENS_CAL_SEL_0_1		0xc0000000
+#define TSENS_CAL_SEL_2			0x40000000
+#define TSENS_CAL_SEL_SHIFT		30
+#define TSENS_CAL_SEL_SHIFT_2		28
+#define TSENS_ONE_POINT_CALIB		0x1
+#define TSENS_ONE_POINT_CALIB_OPTION_2	0x2
+#define TSENS_TWO_POINT_CALIB		0x3
+
+#define TSENS0_POINT1_SHIFT		8
+#define TSENS1_POINT1_SHIFT		14
+#define TSENS2_POINT1_SHIFT		20
+#define TSENS3_POINT1_SHIFT		26
+#define TSENS5_POINT1_SHIFT		6
+#define TSENS6_POINT1_SHIFT		12
+#define TSENS7_POINT1_SHIFT		18
+#define TSENS8_POINT1_SHIFT		24
+#define TSENS9_POINT1_BACKUP_SHIFT	6
+#define TSENS10_POINT1_SHIFT		6
+#define TSENS10_POINT1_BACKUP_SHIFT	12
+
+#define TSENS_POINT2_BASE_SHIFT		12
+#define TSENS_POINT2_BASE_BACKUP_SHIFT	18
+#define TSENS0_POINT2_SHIFT		20
+#define TSENS0_POINT2_BACKUP_SHIFT	26
+#define TSENS1_POINT2_SHIFT		26
+#define TSENS2_POINT2_BACKUP_SHIFT	6
+#define TSENS3_POINT2_SHIFT		6
+#define TSENS3_POINT2_BACKUP_SHIFT	12
+#define TSENS4_POINT2_SHIFT		12
+#define TSENS4_POINT2_BACKUP_SHIFT	18
+#define TSENS5_POINT2_SHIFT		18
+#define TSENS5_POINT2_BACKUP_SHIFT	24
+#define TSENS6_POINT2_SHIFT		24
+#define TSENS7_POINT2_BACKUP_SHIFT	6
+#define TSENS8_POINT2_SHIFT		6
+#define TSENS8_POINT2_BACKUP_SHIFT	12
+#define TSENS9_POINT2_SHIFT		12
+#define TSENS9_POINT2_BACKUP_SHIFT	18
+#define TSENS10_POINT2_SHIFT		18
+#define TSENS10_POINT2_BACKUP_SHIFT	24
+
+#define TSENS_BASE2_MASK		0xff000
+#define TSENS_BASE2_BACKUP_MASK		0xfc0000
+#define TSENS0_POINT2_MASK		0x3f00000
+#define TSENS0_POINT2_BACKUP_MASK	0xfc000000
+#define TSENS1_POINT2_MASK		0xfc000000
+#define TSENS1_POINT2_BACKUP_MASK	0x3f
+#define TSENS2_POINT2_MASK		0x3f
+#define TSENS2_POINT2_BACKUP_MASK	0xfc0
+#define TSENS3_POINT2_MASK		0xfc0
+#define TSENS3_POINT2_BACKUP_MASK	0x3f000
+#define TSENS4_POINT2_MASK		0x3f000
+#define TSENS4_POINT2_BACKUP_MASK	0xfc0000
+#define TSENS5_POINT2_MASK		0xfc0000
+#define TSENS5_POINT2_BACKUP_MASK	0x3f000000
+#define TSENS6_POINT2_MASK		0x3f000000
+#define TSENS6_POINT2_BACKUP_MASK	0x3f
+#define TSENS7_POINT2_MASK		0x3f
+#define TSENS7_POINT2_BACKUP_MASK	0xfc0
+#define TSENS8_POINT2_MASK		0xfc0
+#define TSENS8_POINT2_BACKUP_MASK	0x3f000
+#define TSENS9_POINT2_MASK		0x3f000
+#define TSENS9_POINT2_BACKUP_MASK	0xfc0000
+#define TSENS10_POINT2_MASK		0xfc0000
+#define TSENS10_POINT2_BACKUP_MASK	0x3f000000
+
+#define TSENS_8X26_BASE0_MASK		0x1fe000
+#define TSENS0_8X26_POINT1_MASK		0x7e00000
+#define TSENS1_8X26_POINT1_MASK		0x3f
+#define TSENS2_8X26_POINT1_MASK		0xfc0
+#define TSENS3_8X26_POINT1_MASK		0x3f000
+#define TSENS4_8X26_POINT1_MASK		0xfc0000
+#define TSENS5_8X26_POINT1_MASK		0x3f000000
+#define TSENS6_8X26_POINT1_MASK		0x3f00000
+#define TSENS_8X26_TSENS_CAL_SEL	0xe0000000
+#define TSENS_8X26_BASE1_MASK		0xff
+#define TSENS0_8X26_POINT2_MASK		0x3f00
+#define TSENS1_8X26_POINT2_MASK		0xfc000
+#define TSENS2_8X26_POINT2_MASK		0x3f00000
+#define TSENS3_8X26_POINT2_MASK		0xfc000000
+#define TSENS4_8X26_POINT2_MASK		0x3f00000
+#define TSENS5_8X26_POINT2_MASK		0xfc000000
+#define TSENS6_8X26_POINT2_MASK		0x7e0000
+
+#define TSENS_8X26_CAL_SEL_SHIFT	29
+#define TSENS_8X26_BASE0_SHIFT		13
+#define TSENS0_8X26_POINT1_SHIFT	21
+#define TSENS2_8X26_POINT1_SHIFT	6
+#define TSENS3_8X26_POINT1_SHIFT	12
+#define TSENS4_8X26_POINT1_SHIFT	18
+#define TSENS5_8X26_POINT1_SHIFT	24
+#define TSENS6_8X26_POINT1_SHIFT	20
+
+#define TSENS0_8X26_POINT2_SHIFT	8
+#define TSENS1_8X26_POINT2_SHIFT	14
+#define TSENS2_8X26_POINT2_SHIFT	20
+#define TSENS3_8X26_POINT2_SHIFT	26
+#define TSENS4_8X26_POINT2_SHIFT	20
+#define TSENS5_8X26_POINT2_SHIFT	26
+#define TSENS6_8X26_POINT2_SHIFT	17
+
+#define TSENS_8X10_CAL_SEL_SHIFT	28
+#define TSENS_8X10_BASE1_SHIFT		8
+#define TSENS0_8X10_POINT1_SHIFT	16
+#define TSENS0_8X10_POINT2_SHIFT	22
+#define TSENS1_8X10_POINT2_SHIFT	6
+#define TSENS_8X10_BASE0_MASK		0xff
+#define TSENS_8X10_BASE1_MASK		0xff00
+#define TSENS0_8X10_POINT1_MASK		0x3f0000
+#define TSENS0_8X10_POINT2_MASK		0xfc00000
+#define TSENS_8X10_TSENS_CAL_SEL	0x70000000
+#define TSENS1_8X10_POINT1_MASK		0x3f
+#define TSENS1_8X10_POINT2_MASK		0xfc0
+#define TSENS_8X10_REDUN_SEL_MASK	0x6000000
+#define TSENS_8X10_REDUN_SEL_SHIFT	25
+
+#define TSENS0_9900_POINT1_SHIFT	19
+#define TSENS2_9900_POINT1_SHIFT	12
+#define TSENS3_9900_POINT1_SHIFT	24
+#define TSENS4_9900_POINT1_SHIFT	6
+#define TSENS5_9900_POINT1_SHIFT	18
+#define TSENS_9900_BASE1_MASK		0xff
+#define TSENS0_9900_POINT1_MASK		0x1f80000
+#define TSENS1_9900_POINT1_MASK		0x3f
+#define TSENS2_9900_POINT1_MASK		0x3f000
+#define TSENS3_9900_POINT1_MASK		0x3f000000
+#define TSENS4_9900_POINT1_MASK		0xfc0
+#define TSENS5_9900_POINT1_MASK		0xfc0000
+#define TSENS6_9900_POINT1_MASK		0x3f
+
+#define TSENS_9900_BASE2_SHIFT		8
+#define TSENS0_9900_POINT2_SHIFT	25
+#define TSENS1_9900_POINT2_SHIFT	6
+#define TSENS2_9900_POINT2_SHIFT	18
+#define TSENS4_9900_POINT2_SHIFT	12
+#define TSENS5_9900_POINT2_SHIFT	24
+#define TSENS6_9900_POINT2_SHIFT	6
+#define TSENS_9900_BASE2_MASK		0xff00
+#define TSENS0_9900_POINT2_MASK		0x7e000000
+#define TSENS1_9900_POINT2_MASK		0xfc0
+#define TSENS2_9900_POINT2_MASK		0xfc0000
+#define TSENS3_9900_POINT2_MASK		0x3f
+#define TSENS4_9900_POINT2_MASK		0x3f000
+#define TSENS5_9900_POINT2_MASK		0x3f000000
+#define TSENS6_9900_POINT2_MASK		0xfc0
+
+#define TSENS_9900_CAL_SEL_SHIFT	16
+#define TSENS_9900_TSENS_CAL_SEL	0x00070000
+
+#define TSENS_BIT_APPEND		0x3
 
 #define TSENS_CAL_DEGC_POINT1		30
 #define TSENS_CAL_DEGC_POINT2		120
@@ -304,6 +515,20 @@ LIST_HEAD(tsens_device_list);
 static char dbg_buff[1024];
 static struct dentry *dent;
 static struct dentry *dfile_stats;
+
+//common O80 branch for sdm630(1) and msm8998(2)
+#ifdef CONFIG_HTC_TSENS_CONTROLLER_1
+#define MONITOR_TSENS_NUM_CONTROLLER 1
+#else
+#define MONITOR_TSENS_NUM_CONTROLLER 2
+#endif
+
+#ifdef CONFIG_HTC_POWER_DEBUG
+static struct workqueue_struct *monitor_tsense_wq = NULL;
+struct delayed_work monitor_tsens_status_worker;
+static void monitor_tsens_status(struct work_struct *work);
+struct tsens_tm_device *monitor_tsens_status_tmdev[MONITOR_TSENS_NUM_CONTROLLER];
+#endif
 
 static struct of_device_id tsens_match[] = {
 	{	.compatible = "qcom,msm8996-tsens",
@@ -1988,6 +2213,51 @@ static irqreturn_t tsens_tm_irq_thread(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+#define MESSAGE_SIZE 100
+
+static void monitor_tsens_status(struct work_struct *work)
+{
+	unsigned int i, j, cntl;
+	int enable = 0;
+	int temp = 0, rc = 0;
+	unsigned int tsens_id = 0;
+	char message[MESSAGE_SIZE];
+	char thermal_message[256];
+
+	memset(thermal_message, 0, sizeof(thermal_message));
+	for(i = 0 ; i < MONITOR_TSENS_NUM_CONTROLLER ; i++) {
+		if(monitor_tsens_status_tmdev[i] == NULL) {
+			printk("[THERMAL] tsens%d_controller doesn't initialize yet\n", i);
+			continue;
+		}
+		cntl = readl_relaxed(MPM2_TSENS_CTRL(monitor_tsens_status_tmdev[i]->tsens_addr));
+		safe_strcat(thermal_message, "[THERMAL] ");
+		scnprintf(message, MESSAGE_SIZE, "Cntl_%d[0x%08X]: ", i, cntl);
+		safe_strcat(thermal_message, message);
+		cntl >>= TSENS_SENSOR_SHIFT;
+
+		for (j = 0 ; j <= monitor_tsens_status_tmdev[i]->tsens_num_sensor; j++) {
+			enable = cntl & (0x1 << j);
+			if (enable > 0) {
+				rc = msm_tsens_get_temp(tsens_id, &temp);
+				if (!rc){
+					scnprintf(message, MESSAGE_SIZE, "%s(%d,%d.%d)", j > 0 ? "," : "", tsens_id, temp/10, abs(temp%10));
+					safe_strcat(thermal_message, message);
+				}else
+					tsens_id++;
+			}
+			tsens_id++;
+		}
+		printk("%s\n", thermal_message);
+		memset(thermal_message, 0, sizeof(thermal_message));
+	}
+	if (monitor_tsense_wq) {
+		queue_delayed_work(monitor_tsense_wq, &monitor_tsens_status_worker, msecs_to_jiffies(60000));
+	}
+}
+#endif
+
 static irqreturn_t tsens_irq_thread(int irq, void *data)
 {
 	struct tsens_tm_device *tm = data;
@@ -2382,6 +2652,7 @@ fail_tmdev:
 	return rc;
 }
 
+int tsens_tm_probe_count;
 static int tsens_tm_probe(struct platform_device *pdev)
 {
 	struct device_node *of_node = pdev->dev.of_node;
@@ -2439,6 +2710,28 @@ static int tsens_tm_probe(struct platform_device *pdev)
 	if (rc < 0)
 		pr_debug("Cannot create create_tsens_mtc_sysfs %d\n", rc);
 
+#ifdef CONFIG_HTC_POWER_DEBUG
+	for(i = 0 ; i < MONITOR_TSENS_NUM_CONTROLLER ; i++) {
+		if(tmdev == monitor_tsens_status_tmdev[i])
+			break;
+		if(monitor_tsens_status_tmdev[i] == NULL) {
+			monitor_tsens_status_tmdev[i] = tmdev;
+			break;
+		}
+	}
+	if(!tsens_tm_probe_count) {
+		tsens_tm_probe_count++;
+		if (monitor_tsense_wq == NULL) {
+			/* Create private workqueue... */
+			monitor_tsense_wq = create_workqueue("monitor_tsense_wq");
+			printk(KERN_INFO "Create monitor tsense workqueue(0x%p)...\n", monitor_tsense_wq);
+		}
+		if (monitor_tsense_wq) {
+			INIT_DELAYED_WORK(&monitor_tsens_status_worker, monitor_tsens_status);
+			queue_delayed_work(monitor_tsense_wq, &monitor_tsens_status_worker, msecs_to_jiffies(0));
+		}
+	}
+#endif
 	return 0;
 fail:
 	if (tmdev->tsens_critical_wq)

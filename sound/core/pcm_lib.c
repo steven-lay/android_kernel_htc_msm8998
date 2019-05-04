@@ -1935,7 +1935,13 @@ static int wait_for_avail(struct snd_pcm_substream *substream,
 	if (runtime->no_period_wakeup)
 		wait_time = MAX_SCHEDULE_TIMEOUT;
 	else {
+/* HTC_AUD_START - Modify timeout to 1 second to avoid ANR or policy timeout*/
+#if 0
 		wait_time = 10;
+#else
+		wait_time = 1;
+#endif
+/* HTC_AUD_END */
 		if (runtime->rate) {
 			long t = runtime->period_size * 2 / runtime->rate;
 			wait_time = max(t, wait_time);

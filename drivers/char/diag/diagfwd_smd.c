@@ -258,7 +258,7 @@ static int smd_channel_probe(struct platform_device *pdev, uint8_t type)
 		index = PERIPHERAL_SENSORS;
 		break;
 	default:
-		pr_debug("diag: In %s Received probe for invalid index %d",
+		DIAGFWD_DBUG("diag: In %s Received probe for invalid index %d",
 			__func__, pdev->id);
 		return -EINVAL;
 	}
@@ -301,7 +301,7 @@ static int smd_channel_probe(struct platform_device *pdev, uint8_t type)
 
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
-	pr_debug("diag: In %s, SMD port probed %s, id = %d, r = %d\n",
+	DIAGFWD_DBUG("diag: In %s, SMD port probed %s, id = %d, r = %d\n",
 		 __func__, smd_info->name, pdev->id, r);
 
 	return 0;

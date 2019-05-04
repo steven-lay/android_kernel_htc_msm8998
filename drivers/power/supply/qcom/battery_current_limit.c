@@ -232,6 +232,7 @@ static void bcl_handle_hotplug(struct work_struct *work)
 			cpumask_set_cpu(cpu, &curr_req.offline_mask);
 	}
 	trace_bcl_sw_mitigation("Start hotplug CPU", bcl_hotplug_request);
+	pr_info("Start to request hotplug: 0x%x\n", bcl_hotplug_request);
 	ret = devmgr_client_request_mitigation(
 		gbcl->hotplug_handle,
 		HOTPLUG_MITIGATION_REQ,

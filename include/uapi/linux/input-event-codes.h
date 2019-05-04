@@ -335,6 +335,8 @@
 #define KEY_RFKILL		247	/* Key that controls all radios */
 
 #define KEY_MICMUTE		248	/* Mute / unmute the microphone */
+#define HALL_N_POLE             251     /* HALL Sensor N pole*/
+#define HALL_S_POLE             252     /* HALL Sensor S pole*/
 
 /* Code 255 is reserved for special needs of AT keyboard driver */
 

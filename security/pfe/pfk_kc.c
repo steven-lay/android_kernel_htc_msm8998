@@ -373,6 +373,12 @@ static void kc_clear_entry(struct kc_entry *entry)
 
 	entry->time_stamp = 0;
 	entry->scm_error = 0;
+
+	entry->key_index = PFK_KC_STARTING_INDEX;
+	entry->state = FREE;
+
+	entry->loaded_ref_cnt = 0;
+	entry->thread_pending = NULL;
 }
 
 /**

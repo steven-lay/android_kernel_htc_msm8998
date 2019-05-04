@@ -770,17 +770,23 @@ static int msm_hs_spsconnect_tx(struct msm_hs_port *msm_uport)
 	struct sps_register_event *sps_event = &tx->cons.event;
 	unsigned long flags;
 	unsigned int data;
+	int retry = 0;
 
 	if (tx->flush != FLUSH_SHUTDOWN) {
 		MSM_HS_ERR("%s:Invalid flush state:%d\n", __func__, tx->flush);
 		return 0;
 	}
 
+retry_sps_connect:
 	/* Establish connection between peripheral and memory endpoint */
 	ret = sps_connect(sps_pipe_handle, sps_config);
 	if (ret) {
 		MSM_HS_ERR("msm_serial_hs: sps_connect() failed for tx!!\n"
 		"pipe_handle=0x%p ret=%d", sps_pipe_handle, ret);
+		if (retry < 3) {
+			++retry;
+			goto retry_sps_connect;
+		}
 		return ret;
 	}
 	/* Register callback event for EOT (End of transfer) event. */
@@ -832,17 +838,23 @@ static int msm_hs_spsconnect_rx(struct uart_port *uport)
 	struct sps_connect *sps_config = &rx->prod.config;
 	struct sps_register_event *sps_event = &rx->prod.event;
 	unsigned long flags;
+	int retry = 0;
 
 	if (msm_uport->rx.pending_flag) {
 		MSM_HS_WARN("%s(): Buffers may be pending 0x%lx",
 			__func__, msm_uport->rx.pending_flag);
 	}
 
+retry_sps_connect:
 	/* Establish connection between peripheral and memory endpoint */
 	ret = sps_connect(sps_pipe_handle, sps_config);
 	if (ret) {
 		MSM_HS_ERR("msm_serial_hs: sps_connect() failed for rx!!\n"
 		"pipe_handle=0x%p ret=%d", sps_pipe_handle, ret);
+		if (retry < 3) {
+			++retry;
+			goto retry_sps_connect;
+		}
 		return ret;
 	}
 	/* Register callback event for DESC_DONE event. */

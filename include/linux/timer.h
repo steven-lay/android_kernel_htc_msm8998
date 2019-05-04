@@ -220,5 +220,8 @@ unsigned long __round_jiffies_up(unsigned long j, int cpu);
 unsigned long __round_jiffies_up_relative(unsigned long j, int cpu);
 unsigned long round_jiffies_up(unsigned long j);
 unsigned long round_jiffies_up_relative(unsigned long j);
-
+#if 0 //FIX ME
+void htc_timer_stats_show(u16 water_mark);
+void htc_timer_stats_onoff(char onoff);
+#endif
 #endif

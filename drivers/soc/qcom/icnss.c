@@ -2470,8 +2470,24 @@ static int icnss_modem_notifier_nb(struct notifier_block *nb,
 
 	icnss_pr_vdbg("Modem-Notify: event %lu\n", code);
 
+#if defined(CONFIG_HTC_FEATURES_SSR)
 	if (code == SUBSYS_AFTER_SHUTDOWN &&
-	    notif->crashed == CRASH_STATUS_ERR_FATAL) {
+		/* HTC_WIFI_START */
+		notif->crashed == CRASH_STATUS_ERR_FATAL &&
+		/* HTC_WIFI_END */
+		notif->enable_ramdump == ENABLE_RAMDUMP) {
+#else
+	/* HTC_WIFI_START */
+#if 0
+	// ** remove original code
+	if (code == SUBSYS_AFTER_SHUTDOWN) {
+#else
+	// ** add new clode
+	if (code == SUBSYS_AFTER_SHUTDOWN &&
+		notif->crashed == CRASH_STATUS_ERR_FATAL) {
+#endif
+	/* HTC_WIFI_END */
+#endif
 		ret = icnss_assign_msa_perm_all(priv,
 						ICNSS_MSA_PERM_DUMP_COLLECT);
 		if (!ret) {

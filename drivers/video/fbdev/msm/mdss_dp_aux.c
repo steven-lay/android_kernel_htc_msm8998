@@ -223,6 +223,13 @@ static int dp_aux_write_cmds(struct mdss_dp_drv_pdata *ep,
 	int len, ret;
 
 	mutex_lock(&ep->aux_mutex);
+
+	if (!ep->dp_initialized) {
+		pr_err("DP not initialized!\n");
+		ret = -ENODEV;
+		goto end;
+	}
+
 	ep->aux_cmd_busy = 1;
 
 	tp = &ep->txp;
@@ -252,6 +259,13 @@ static int dp_aux_write_cmds(struct mdss_dp_drv_pdata *ep,
 	if (!wait_for_completion_timeout(&ep->aux_comp, HZ/4)) {
 		pr_err("aux write timeout\n");
 		ep->aux_error_num = EDP_AUX_ERR_TOUT;
+
+		if (!ep->dp_initialized) {
+			pr_err("DP not initialized!\n");
+			ret = -ENODEV;
+			goto end;
+		}
+
 		/* Reset the AUX controller state machine */
 		mdss_dp_aux_reset(&ep->ctrl_io);
 	}
@@ -260,7 +274,7 @@ static int dp_aux_write_cmds(struct mdss_dp_drv_pdata *ep,
 		ret = len;
 	else
 		ret = ep->aux_error_num;
-
+end:
 	ep->aux_cmd_busy = 0;
 	mutex_unlock(&ep->aux_mutex);
 	return  ret;
@@ -276,6 +290,12 @@ static int dp_aux_read_cmds(struct mdss_dp_drv_pdata *ep,
 	u32 data;
 
 	mutex_lock(&ep->aux_mutex);
+	if (!ep->dp_initialized) {
+		pr_err("DP not initialized!\n");
+		ret = -ENODEV;
+		goto end;
+	}
+
 	ep->aux_cmd_busy = 1;
 
 	tp = &ep->txp;
@@ -309,6 +329,13 @@ static int dp_aux_read_cmds(struct mdss_dp_drv_pdata *ep,
 	if (!wait_for_completion_timeout(&ep->aux_comp, HZ/4)) {
 		pr_err("aux read timeout\n");
 		ep->aux_error_num = EDP_AUX_ERR_TOUT;
+
+		if (!ep->dp_initialized) {
+			pr_err("DP not initialized!\n");
+			ret = -ENODEV;
+			goto end;
+		}
+
 		/* Reset the AUX controller state machine */
 		mdss_dp_aux_reset(&ep->ctrl_io);
 		ret = ep->aux_error_num;
@@ -409,7 +436,7 @@ retry:
 		connected = dp->cable_connected;
 		mutex_unlock(&dp->attention_lock);
 
-		if (!connected) {
+		if (!connected || !dp->dp_initialized) {
 			pr_err("dp cable disconnected\n");
 			ret = -ENODEV;
 			goto end;
@@ -432,6 +459,12 @@ retry:
 
 	if (adjust_count >= aux_cfg1_config_count) {
 		pr_err("PHY_AUX_CONFIG1 calibration failed\n");
+		goto end;
+	}
+
+	if (!dp->dp_initialized) {
+		pr_err("DP not initialized!\n");
+		ret = -ENODEV;
 		goto end;
 	}
 
@@ -1022,6 +1055,12 @@ int mdss_dp_edid_read(struct mdss_dp_drv_pdata *dp)
 		if (rlen != EDID_BLOCK_SIZE) {
 			pr_err("Read failed. rlen=%s\n",
 				mdss_dp_get_aux_error(rlen));
+			if (!dp->dp_initialized) {
+				pr_err("DP not initialized!\n");
+				ret = -ENODEV;
+				break;
+			}
+
 			mdss_dp_phy_aux_update_config(dp, PHY_AUX_CFG1);
 			phy_aux_update_requested = true;
 			retries--;

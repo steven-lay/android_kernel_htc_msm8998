@@ -266,6 +266,16 @@ config LEDS_LP5562
 	  Driver provides direct control via LED class and interface for
 	  programming the engines.
 
+config LEDS_LP5562_HTC
+	tristate "LED Support for N.S. LP5562 LED driver chip"
+	depends on LEDS_CLASS && I2C
+	select LEDS_LP55XX_COMMON
+	help
+	  If you say yes here you get support for the National Semiconductor
+	  LP5562 LED driver. It is 3 channel chip with programmable engines.
+	  Driver provides direct control via LED class and interface for
+	  programming the engines.
+
 config LEDS_LP8501
 	tristate "LED Support for TI LP8501 LED driver chip"
 	depends on LEDS_CLASS && I2C

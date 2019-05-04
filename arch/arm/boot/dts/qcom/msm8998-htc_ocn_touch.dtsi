@@ -1,0 +1,216 @@
+&ts_active {
+	mux {
+		pins = "gpio125";
+		function = "gpio";
+	};
+	config {
+		pins = "gpio125";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+};
+&ts_reset_active {
+	mux {
+		pins = "gpio96";
+		function = "gpio";
+	};
+	config {
+		pins = "gpio96";
+		drive-strength = <2>;
+		bias-disable; /* No PULL */
+		output-low;
+	};
+};
+&ts_reset_suspend {
+	mux {
+		pins = "gpio96";
+		function = "gpio";
+	};
+	config {
+		pins = "gpio96";
+		drive-strength = <2>;
+		bias-disable; /* no pull*/
+	};
+};
+
+&soc {
+	touch_fw_update {
+		compatible = "htc,touch_fwu";
+	};
+
+	tlmm: pinctrl@03400000 {
+		ts_suspend: ts_suspend {
+			mux {
+			pins = "gpio125";
+			function = "gpio";
+		};
+			config {
+				pins = "gpio125";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+		ts_di_power_active: ts_di_power_active {
+			mux {
+				pins = "gpio30";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio30";
+				drive-strength = <2>;
+				bias-disable;
+				output-high;
+			};
+		};
+		ts_di_power_suspend: ts_di_power_suspend {
+			mux {
+				pins = "gpio30";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio30";
+				drive-strength = <2>;
+				bias-disable;
+				output-low;
+			};
+		};
+
+		ts_an_power_active: ts_an_power_active {
+		};
+
+		ts_an_power_suspend: ts_an_power_suspend {
+		};
+
+		ts_i2c_switch_select_cpu: ts_i2c_switch_select_cpu {
+			mux {
+				pins = "gpio69";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio69";
+				drive-strength = <2>;
+				bias-disable;
+				output-low;
+			};
+		};
+		ts_i2c_switch_select_shub: ts_i2c_switch_select_shub {
+			mux {
+				pins = "gpio69";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio69";
+				drive-strength = <2>;
+				bias-disable;
+				output-high;
+			};
+		};
+
+		ts_i2c0_sda: ts_i2c0_sda {
+		};
+
+		ts_i2c0_scl: ts_i2c0_scl {
+		};
+	};
+};
+
+&i2c_5 {
+	tsc@24 {
+		compatible = "cy,cyttsp5_i2c_adapter";
+		reg = <0x24>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <125 0x2>;
+		pinctrl-names = "rst_gpio_ioexp_active", "rst_gpio_ioexp_inactive",
+				"TP_1V8_EN_HIGH", "TP_1V8_EN_LOW",
+				"TP_I2C_SEL_CPU", "TP_I2C_SEL_SHUB",
+				"TP_I2C_SDA", "TP_I2C_SCL", "TS_ACTIVE", "TS_SUSPEND";
+		pinctrl-0 = <&ts_reset_active>;
+		pinctrl-1 = <&ts_reset_suspend>;
+		pinctrl-2 = <&ts_di_power_active>;
+		pinctrl-3 = <&ts_di_power_suspend>;
+		pinctrl-4 = <&ts_i2c_switch_select_cpu>;
+		pinctrl-5 = <&ts_i2c_switch_select_shub>;
+		pinctrl-6 = <&ts_i2c0_sda>;
+		pinctrl-7 = <&ts_i2c0_scl>;
+		pinctrl-8 = <&ts_active>;
+		pinctrl-9 = <&ts_suspend>;
+		cy,adapter_id = "cyttsp5_i2c_adapter";
+		cy,core {
+			cy,name = "cyttsp5_core";
+			cy,irq_gpio = <&tlmm 125 0x0>;
+			cy,rst_gpio = <&tlmm 96 0x0>; //htc
+			cy,TP_1V8_EN_gpio = <&tlmm 30 0x0>; //htc
+			cy,TP_3V3_EN_gpio = <&tlmm 35 0x0>; //htc
+			cy,TP_I2C_SEL_CPU_gpio = <&tlmm 69 0x0>; //htc
+			cy,hid_desc_register = <1>;
+			cy,support_glove = <1>;
+			/* CY_CORE_FLAG_RESTORE_PARAMETERS */
+			cy,flags = <4>;
+			/* CY_CORE_EWG_NONE */
+			cy,easy_wakeup_gesture = <0>;
+			cy,btn_keys = <172 /* KEY_HOMEPAGE */
+						/* previously was KEY_HOME, new Android versions use KEY_HOMEPAGE */
+			               139 /* KEY_MENU */
+			               158 /* KEY_BACK */
+			               217 /* KEY_SEARCH */
+			               114 /* KEY_VOLUMEDOWN */
+			               115 /* KEY_VOLUMEUP */
+			               212 /* KEY_CAMERA */
+			               116>; /* KEY_POWER */
+			cy,btn_keys-tag = <0>;
+			cy,mt {
+				cy,name = "cyttsp5_touchscreen";
+				cy,inp_dev_name = "cyttsp5_touchscreen";
+				cy,flags = <0>;
+				cy,abs =
+					/* ABS_MT_POSITION_X, CY_ABS_MIN_X, CY_ABS_MAX_X, 0, 0 */
+					<0x35 0 1080 0 0
+					/* ABS_MT_POSITION_Y, CY_ABS_MIN_Y, CY_ABS_MAX_Y, 0, 0 */
+					0x36 0 1920 0 0
+					/* ABS_MT_PRESSURE, CY_ABS_MIN_P, CY_ABS_MAX_P, 0, 0 */
+					0x3a 0 255 0 0
+					/* CY_IGNORE_VALUE, CY_ABS_MIN_W, CY_ABS_MAX_W, 0, 0 */
+					0xffff 0 255 0 0
+					/* ABS_MT_TRACKING_ID, CY_ABS_MIN_T, CY_ABS_MAX_T, 0, 0 */
+					0x39 0 15 0 0
+					/* ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0 */
+					0x30 0 255 0 0
+					/* ABS_MT_TOUCH_MINOR, 0, 255, 0, 0 */
+					0x31 0 255 0 0
+					/* ABS_MT_ORIENTATION, -127, 127, 0, 0 */
+					0x34 0xffffff81 127 0 0
+					/* ABS_MT_TOOL_TYPE, 0, MT_TOOL_MAX, 0, 0 */
+					/*0x37 0 1 0 0*/
+					0xffff 0 1 0 0  //0xffff means -1
+					/* ABS_MT_DISTANCE, 0, 255, 0, 0 */
+					0x3b 0 255 0 0>;
+
+				cy,vkeys_x = <720>;
+				cy,vkeys_y = <1280>;
+
+				cy,virtual_keys = /* KeyCode CenterX CenterY Width Height */
+					/* KEY_BACK */
+					<158 1360 90 160 180
+					/* KEY_MENU */
+					139 1360 270 160 180
+					/* KEY_HOMEPAGE */
+					172 1360 450 160 180
+					/* KEY SEARCH */
+					217 1360 630 160 180>;
+			};
+
+			cy,btn {
+				cy,name = "cyttsp5_btn";
+				cy,inp_dev_name = "cyttsp5_btn";
+			};
+
+			cy,proximity {
+				cy,name = "cyttsp5_proximity";
+				cy,inp_dev_name = "cyttsp5_proximity";
+				cy,abs =
+					/* ABS_DISTANCE, CY_PROXIMITY_MIN_VAL, CY_PROXIMITY_MAX_VAL, 0, 0 */
+					<0x19 0 1 0 0>;
+			};
+		};
+	};
+};

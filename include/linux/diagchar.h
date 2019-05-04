@@ -26,6 +26,13 @@
 #define DCI_PKT_TYPE		0x00000400
 #define HDLC_SUPPORT_TYPE	0x00001000
 
+/* We always use 64 for the logging mode: UART/QXDM2SD,
+ * however, to not conflict with QCT definition, we shift
+ * the USERMODE_DIAGFWD to 2048
+ */
+#define USERMODE_DIAGFWD		2048
+#define USERMODE_DIAGFWD_LEGACY		64
+
 #define USB_MODE			1
 #define MEMORY_DEVICE_MODE		2
 #define NO_LOGGING_MODE			3
@@ -67,6 +74,7 @@
 #define DIAG_IOCTL_REGISTER_CALLBACK	37
 #define DIAG_IOCTL_HDLC_TOGGLE	38
 #define DIAG_IOCTL_QUERY_PD_LOGGING	39
+#define DIAG_IOCTL_NONBLOCKING_TIMEOUT	64
 
 /* PC Tools IDs */
 #define APQ8060_TOOLS_ID	4062

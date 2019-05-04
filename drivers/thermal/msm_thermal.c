@@ -52,6 +52,7 @@
 #include <linux/io.h>
 
 #include <asm/cacheflush.h>
+#include <linux/delay.h>
 
 #define CREATE_TRACE_POINTS
 #define TRACE_MSM_THERMAL
@@ -1414,6 +1415,24 @@ static int get_kernel_cluster_info(int *cluster_id, cpumask_t *cluster_cpus)
 		}
 	}
 
+	return cluster_cnt;
+}
+
+int get_cluster_info(int *cluster_id, unsigned long int *cluster_mask)
+{
+	int temp_cluster_id[NR_CPUS] = {[0 ... NR_CPUS-1] = -1};
+	int i, cluster_cnt = 0;
+	cpumask_t cluster_cpus[NR_CPUS];
+	cluster_cnt = get_kernel_cluster_info(temp_cluster_id, cluster_cpus);
+	if(cluster_cnt <= 0){
+		pr_debug("cluster_cnt:%d , Cluster Info not defined. KTM continues.\n", cluster_cnt);
+                return cluster_cnt;
+	}else{
+		for (i = 0; i < cluster_cnt; i++) {
+			cluster_id[i] = temp_cluster_id[i];
+			cluster_mask[i] = *cpumask_bits(&cluster_cpus[i]);
+		}
+	}
 	return cluster_cnt;
 }
 
@@ -2914,12 +2933,22 @@ static void therm_reset_notify(struct therm_threshold *thresh_data)
 
 	switch (thresh_data->trip_triggered) {
 	case THERMAL_TRIP_CONFIGURABLE_HI:
+		mdelay(50);
 		ret = therm_get_temp(thresh_data->sensor_id,
 				thresh_data->id_type, &temp);
-		if (ret)
+		if (ret) {
 			pr_err("Unable to read TSENS sensor:%d. err:%d\n",
 				thresh_data->sensor_id, ret);
-		msm_thermal_bite(thresh_data->sensor_id, temp);
+			break;
+		}
+		if (thresh_data->sensor_id < 0 || thresh_data->sensor_id > max_tsens_num) {
+			pr_err("unknown tsens id");
+			break;
+		}
+		if (temp >= msm_thermal_info.therm_reset_temp_degC)
+			msm_thermal_bite(thresh_data->sensor_id, temp);
+		else
+			pr_err("msm_thermal ignore thermal reset");
 		break;
 	case THERMAL_TRIP_CONFIGURABLE_LOW:
 		break;
@@ -7519,6 +7548,13 @@ static int msm_thermal_dev_exit(struct platform_device *inp_dev)
 
 	return 0;
 }
+
+void set_ktm_freq_limit(uint32_t freq_limit)
+{
+	if (freq_limit > 0)
+		msm_thermal_info.freq_limit = freq_limit;
+}
+
 
 static int __init ktm_params(char *str)
 {

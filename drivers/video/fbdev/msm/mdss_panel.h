@@ -759,6 +759,23 @@ struct mdss_dsi_dual_pu_roi {
 	struct mdss_rect second_roi;
 	bool enabled;
 };
+/**
+ *  HTC: A Struct for Backlgith 1.0.
+ *  Apply on backlight_transfer function.
+ *  The function will base on brt_data and bl_data to transfer brt and bl value.
+ *  The brt and bl was direct map. For internal value, we will use interpolation method to get transfer value.
+ *
+ *  size: A value to save brt and bl table size.
+ *  brt_data: A point referring to brightness table related data.
+ *  bl_data: A point referring to backlight table related data
+ */
+struct htc_backlight1_table {
+	bool apply_cali;
+	int size;
+	u16 *brt_data;
+	u16 *bl_data;
+	u16 *bl_data_raw;
+};
 
 struct mdss_panel_hdr_properties {
 	bool hdr_enabled;
@@ -773,6 +790,13 @@ struct mdss_panel_hdr_properties {
 	u32 avg_brightness;
 	/* Blackness level supported by panel */
 	u32 blackness_level;
+};
+
+struct calibration_gain {
+	u16 BKL;
+	u16 R;
+	u16 G;
+	u16 B;
 };
 
 struct mdss_panel_info {
@@ -934,6 +958,12 @@ struct mdss_panel_info {
 
 	/* esc clk recommended for the panel */
 	u32 esc_clk_rate_hz;
+
+	/*HTC add as below*/
+	struct htc_backlight1_table brt_bl_table;
+	int camera_blk;
+	int burst_bl_value;
+	struct calibration_gain cali_gain;
 };
 
 struct mdss_panel_timing {

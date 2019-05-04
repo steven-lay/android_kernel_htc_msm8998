@@ -6,10 +6,13 @@
 
 #include <linux/sched.h>
 
+extern void collect_io_stats(size_t rw_bytes, int type);
+
 #ifdef CONFIG_TASK_IO_ACCOUNTING
 static inline void task_io_account_read(size_t bytes)
 {
 	current->ioac.read_bytes += bytes;
+	collect_io_stats(bytes, READ);
 }
 
 /*
@@ -24,6 +27,7 @@ static inline unsigned long task_io_get_inblock(const struct task_struct *p)
 static inline void task_io_account_write(size_t bytes)
 {
 	current->ioac.write_bytes += bytes;
+	collect_io_stats(bytes, WRITE);
 }
 
 /*
@@ -57,6 +61,7 @@ static inline void task_blk_io_accounting_add(struct task_io_accounting *dst,
 
 static inline void task_io_account_read(size_t bytes)
 {
+	collect_io_stats(bytes, READ);
 }
 
 static inline unsigned long task_io_get_inblock(const struct task_struct *p)
@@ -66,6 +71,7 @@ static inline unsigned long task_io_get_inblock(const struct task_struct *p)
 
 static inline void task_io_account_write(size_t bytes)
 {
+	collect_io_stats(bytes, WRITE);
 }
 
 static inline unsigned long task_io_get_oublock(const struct task_struct *p)

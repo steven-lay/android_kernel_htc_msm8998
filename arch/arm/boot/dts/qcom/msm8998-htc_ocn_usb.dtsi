@@ -1,0 +1,138 @@
+/* Copyright (c) 2016, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/*
+ * msm8998-htc_ocn-usb: usb related config
+ */
+
+&tlmm {
+	audio_detect_active: audio_detect_active {
+		mux {
+			pins = "gpio27";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio27";
+			bias-disable;
+			output-low;
+			drive-strength = <2>;
+		};
+	};
+
+	audio_detect_sleep: audio_detect_sleep {
+		mux {
+			pins = "gpio27";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio27";
+			bias-disable;
+			output-high;
+			drive-strength = <2>;
+		};
+	};
+
+	usbpd_usbc_int_n: usbpd_usbc_int_n {
+		mux {
+			pins = "gpio37";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio37";
+			drive-strength = <2>;
+			bias-pull-down;
+			input-enable;
+		};
+	};
+
+	usbpd_cc_dir: usbpd_cc_dir {
+		mux {
+			pins = "gpio38";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio38";
+			drive-strength = <2>;
+			bias-disable;
+			input-enable;
+		};
+	};
+
+	tps61099_pinctrl {
+		tps61099_active: tps61099_active {
+			mux {
+				pins = "gpio126";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio126";
+				drive-strength = <2>;
+				bias-disable;
+				output-high;
+			};
+		};
+
+		tps61099_sleep: tps61099_sleep {
+			mux {
+				pins = "gpio126";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio126";
+				drive-strength = <2>;
+				bias-disable;
+				output-low;
+			};
+		};
+	};
+};
+
+&pm8005_gpios {
+	gpio@c100 {
+		reg = <0xc100 0x100>;
+		qcom,pin-num = <2>;
+		qcom,mode = <0>;                /* Digital input */
+		qcom,pull = <5>;                /* No Pull */
+		qcom,src-sel = <0>;             /* GPIO */
+		qcom,master-en = <1>;           /* Enable GPIO */
+		qcom,vin-sel = <1>;
+		status = "okay";
+	};
+};
+
+&soc {
+	htc_tps61099: htc_tps61099 {
+		compatible = "htc,tps61099";
+		pinctrl-names = "tps61099_active", "tps61099_sleep";
+		pinctrl-0 = <&tps61099_active>;
+		pinctrl-1 = <&tps61099_sleep>;
+	};
+};
+
+&pmi8998_pdphy {
+	pinctrl-names = "pin_active" , "pin_sleep" , "usbpd_usbc_int_n" , "usbpd_cc_dir";
+	pinctrl-0 = <&audio_detect_active>;
+	pinctrl-1 = <&audio_detect_sleep>;
+	pinctrl-2 = <&usbpd_usbc_int_n>;
+	pinctrl-3 = <&usbpd_cc_dir>;
+};
+
+&pmi8998_charger {
+	ext_power-supply = <&htc_tps61099>;
+	qcom,external-vconn;
+};

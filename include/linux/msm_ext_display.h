@@ -164,4 +164,6 @@ int msm_hdmi_register_audio_codec(struct platform_device *pdev,
 int msm_ext_disp_register_intf(struct platform_device *pdev,
 		struct msm_ext_disp_init_data *init_data);
 
+void register_htc_dp_hpd_notify(int (*register_fun)(int));
+void unregister_htc_dp_hpd_notify(void);
 #endif /*_MSM_EXT_DISPLAY_H_*/

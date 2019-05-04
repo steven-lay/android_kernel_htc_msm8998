@@ -11,7 +11,7 @@
  *
  */
 
-#define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "[CAM][FL]%s:%d " fmt, __func__, __LINE__
 
 #include <linux/module.h>
 #include <linux/of_gpio.h>
@@ -19,6 +19,16 @@
 #include "msm_flash.h"
 #include "msm_camera_dt_util.h"
 #include "msm_cci.h"
+
+//HTC_START
+#include <linux/htc_flashlight.h>
+#define CONFIG_HTC_FLASHLIGHT_COMMON
+#define HTC_CAM_FEATURE_FLASH_RESTRICTION
+
+#ifdef HTC_CAM_FEATURE_FLASH_RESTRICTION
+static struct kobject *led_status_obj; // tmp remove for fc-1
+#endif
+//HTC_END
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
@@ -384,9 +394,44 @@ static int32_t msm_flash_i2c_release(
 static int32_t msm_flash_off(struct msm_flash_ctrl_t *flash_ctrl,
 	struct msm_flash_cfg_data_t *flash_data)
 {
+	//HTC_START, porting flashlight control
+	#ifndef CONFIG_HTC_FLASHLIGHT_COMMON
+	//HTC_END
 	int32_t i = 0;
+	//HTC_START, porting flashlight control
+	#endif
+	//HTC_END
 
 	CDBG("Enter\n");
+
+	//HTC_START, porting flashlight control
+	#ifdef CONFIG_HTC_FLASHLIGHT_COMMON
+	if(htc_flash_main && htc_torch_main)
+	{
+		if (flash_ctrl->pdev->id == 0)
+		{
+			htc_flash_main(0, 0);
+			htc_torch_main(0, 0);
+		}
+	}
+	else
+		pr_err("[CAM][FL] msm_flash_off, flashlight control is NULL\n");
+
+	#ifdef CONFIG_HTC_FLASHLIGHT
+	if(htc_flash_front && htc_torch_front)
+	{
+		if (flash_ctrl->pdev->id == 1)
+		{
+			htc_flash_front(0, 0);
+			htc_torch_front(0, 0);
+		}
+	}
+	else
+		pr_err("[CAM][FL]Front msm_flash_off, flashlight control is NULL\n");
+	#endif
+
+	#else
+	//HTC_END
 
 	for (i = 0; i < flash_ctrl->flash_num_sources; i++)
 		if (flash_ctrl->flash_trigger[i])
@@ -398,6 +443,9 @@ static int32_t msm_flash_off(struct msm_flash_ctrl_t *flash_ctrl,
 	if (flash_ctrl->switch_trigger)
 		led_trigger_event(flash_ctrl->switch_trigger, 0);
 
+	//HTC_START, porting flashlight control
+	#endif
+	//HTC_END
 	CDBG("Exit\n");
 	return 0;
 }
@@ -493,6 +541,9 @@ static int32_t msm_flash_init(
 	}
 
 	if (flash_ctrl->func_tbl->camera_flash_init) {
+		//HTC_START
+		if (flash_ctrl->pdev->id == 0)
+		//HTC_END
 		rc = flash_ctrl->func_tbl->camera_flash_init(
 				flash_ctrl, flash_data);
 		if (rc < 0) {
@@ -573,6 +624,11 @@ static int32_t msm_flash_prepare(
 {
 	int32_t ret = 0;
 
+	//HTC_START
+	if (flash_ctrl->pdev->id == 1)
+		return 0;
+	//HTC_END
+
 	CDBG("%s:%d: State : %d\n",
 		__func__, __LINE__, flash_ctrl->flash_state);
 
@@ -611,10 +667,55 @@ static int32_t msm_flash_low(
 	struct msm_flash_ctrl_t *flash_ctrl,
 	struct msm_flash_cfg_data_t *flash_data)
 {
+	//HTC_START, porting flashlight control
+	#ifndef CONFIG_HTC_FLASHLIGHT_COMMON
+	//HTC_END
 	uint32_t curr = 0, max_current = 0;
 	int32_t i = 0;
+	//HTC_START, porting flashlight control
+	#endif
+	//HTC_END
 
 	CDBG("Enter\n");
+	//HTC_START, porting flashlight control
+	CDBG("pdev->id = %d\n", flash_ctrl->pdev->id);
+
+	#ifdef CONFIG_HTC_FLASHLIGHT_COMMON
+	if(htc_torch_main && htc_flash_main)
+	{
+		if (flash_ctrl->pdev->id == 0)
+		{
+			if(flash_data->flash_current[0] == -1 && flash_data->flash_current[1] == -1)
+			{
+				pr_info("[CAM][FL] Main msm_flash_low, Set current value (150, 150)\n");
+				htc_torch_main(150, 150);
+			}
+			else
+			{
+				pr_info("[CAM][FL] Main msm_flash_low, Set torch value (%d, %d)\n", flash_data->flash_current[0], flash_data->flash_current[1]);
+				htc_torch_main(flash_data->flash_current[0], flash_data->flash_current[1]);
+			}
+		}
+	}
+	else
+		pr_err("[CAM][FL] Main msm_flash_low, flashlight control is NULL\n");
+
+	#ifdef CONFIG_HTC_FLASHLIGHT
+	if(htc_flash_front && htc_torch_front)
+	{
+		if (flash_ctrl->pdev->id == 1)
+		{
+			pr_err("[CAM][FL] Front msm_flash_low, flashlight current is (50, 50)\n");
+			htc_torch_front(50,50);
+		}
+	}
+	else
+		pr_err("[CAM][FL] Front msm_flash_low, flashlight control is NULL\n");
+	#endif
+
+	#else
+	//HTC_END
+
 	/* Turn off flash triggers */
 	for (i = 0; i < flash_ctrl->flash_num_sources; i++)
 		if (flash_ctrl->flash_trigger[i])
@@ -640,6 +741,11 @@ static int32_t msm_flash_low(
 	}
 	if (flash_ctrl->switch_trigger)
 		led_trigger_event(flash_ctrl->switch_trigger, 1);
+
+	//HTC_START, porting flashlight control
+	#endif
+	//HTC_END
+
 	CDBG("Exit\n");
 	return 0;
 }
@@ -648,9 +754,56 @@ static int32_t msm_flash_high(
 	struct msm_flash_ctrl_t *flash_ctrl,
 	struct msm_flash_cfg_data_t *flash_data)
 {
+	//HTC_START, porting flashlight control
+	#ifndef CONFIG_HTC_FLASHLIGHT_COMMON
+	//HTC_END
 	int32_t curr = 0;
 	int32_t max_current = 0;
 	int32_t i = 0;
+	//HTC_START, porting flashlight control
+	#endif
+	//HTC_END
+
+	CDBG("Enter\n");
+
+	//HTC_START, porting flashlight control
+	#ifdef CONFIG_HTC_FLASHLIGHT_COMMON
+	if(htc_flash_main && htc_torch_main)
+	{
+		if(flash_ctrl->pdev->id ==0)
+		{
+
+			if(flash_data->flash_current[0] == -1 && flash_data->flash_current[1] == -1)
+			{
+				htc_flash_main(1000, 1000);
+				pr_info("[CAM][FL] Main msm_flash_high, Set current value (1000, 1000)\n");
+			}
+			else
+			{
+				pr_info("[CAM][FL] Main msm_flash_high, called linear flashlight current value (%d, %d)\n", flash_data->flash_current[0], flash_data->flash_current[1]);
+				htc_flash_main((int)flash_data->flash_current[0], (int)flash_data->flash_current[1]);
+			}
+
+		}
+	}
+	else
+		pr_err("[CAM][FL] Main msm_flash_high, flashlight control is NULL\n");
+
+	#ifdef CONFIG_HTC_FLASHLIGHT
+	if(htc_flash_front && htc_torch_front)
+	{
+		if(flash_ctrl->pdev->id ==1)
+		{
+		    pr_info("[CAM][FL] Front msm_flash_high, called linear flashlight current value (%d, %d)\n", flash_data->flash_current[0], flash_data->flash_current[1]);
+		    htc_flash_front((int)flash_data->flash_current[0], (int)flash_data->flash_current[1]);
+		}
+	}
+	else
+		pr_err("[CAM][FL] Front msm_flash_high, flashlight control is NULL\n");
+	#endif
+
+	#else
+	//HTC_END
 
 	/* Turn off torch triggers */
 	for (i = 0; i < flash_ctrl->torch_num_sources; i++)
@@ -677,6 +830,11 @@ static int32_t msm_flash_high(
 	}
 	if (flash_ctrl->switch_trigger)
 		led_trigger_event(flash_ctrl->switch_trigger, 1);
+
+	//HTC_START, porting flashlight control
+	#endif
+	//HTC_END
+
 	return 0;
 }
 
@@ -735,8 +893,11 @@ static int32_t msm_flash_config(struct msm_flash_ctrl_t *flash_ctrl,
 		break;
 	case CFG_FLASH_RELEASE:
 		if (flash_ctrl->flash_state != MSM_CAMERA_FLASH_RELEASE) {
-			rc = flash_ctrl->func_tbl->camera_flash_release(
-				flash_ctrl);
+			//HTC_START
+			if (flash_ctrl->pdev->id == 0)
+			//HTC_END
+				rc = flash_ctrl->func_tbl->camera_flash_release(
+					flash_ctrl);
 		} else {
 			CDBG(pr_fmt("Invalid state : %d\n"),
 				flash_ctrl->flash_state);
@@ -865,6 +1026,10 @@ static long msm_flash_subdev_ioctl(struct v4l2_subdev *sd,
 			pr_err("fctrl->func_tbl NULL\n");
 			return -EINVAL;
 		} else {
+			//HTC_START
+			if (fctrl->pdev->id != 0)
+				return 0;
+			//HTC_END
 			fctrl->func_tbl->camera_flash_release(fctrl);
 			return msm_flash_prepare(fctrl);
 		}
@@ -1324,6 +1489,190 @@ static struct platform_driver msm_flash_platform_driver = {
 	},
 };
 
+#ifdef HTC_CAM_FEATURE_FLASH_RESTRICTION
+static uint32_t led_ril_status_value;
+static uint32_t led_wimax_status_value;
+static uint32_t led_hotspot_status_value;
+static uint16_t led_low_temp_limit = 5;
+static uint16_t led_low_cap_limit = 14;
+static uint16_t led_low_cap_limit_dual = 15;
+
+static ssize_t led_ril_status_get(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t length;
+	length = sprintf(buf, "%d\n", led_ril_status_value);
+	return length;
+}
+
+static ssize_t led_ril_status_set(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	uint32_t tmp = 0;
+
+	if (buf[1] == '\n')
+		tmp = buf[0] - 0x30;
+
+	led_ril_status_value = tmp;
+	pr_info("[CAM][FL] led_ril_status_value = %d\n", led_ril_status_value);
+	return count;
+}
+
+static ssize_t led_wimax_status_get(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t length;
+	length = sprintf(buf, "%d\n", led_wimax_status_value);
+	return length;
+}
+
+static ssize_t led_wimax_status_set(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	uint32_t tmp = 0;
+
+	if (buf[1] == '\n')
+		tmp = buf[0] - 0x30;
+
+	led_wimax_status_value = tmp;
+	pr_info("[CAM][FL] led_wimax_status_value = %d\n", led_wimax_status_value);
+	return count;
+}
+
+static ssize_t led_hotspot_status_get(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t length;
+	length = sprintf(buf, "%d\n", led_hotspot_status_value);
+	return length;
+}
+
+static ssize_t led_hotspot_status_set(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	uint32_t tmp = 0;
+
+	tmp = buf[0] - 0x30; /* only get the first char */
+
+	led_hotspot_status_value = tmp;
+	pr_info("[CAM][FL] led_hotspot_status_value = %d\n", led_hotspot_status_value);
+	return count;
+}
+
+static ssize_t low_temp_limit_get(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t length;
+	length = sprintf(buf, "%d\n", led_low_temp_limit);
+	return length;
+}
+
+static ssize_t low_cap_limit_get(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t length;
+	length = sprintf(buf, "%d\n", led_low_cap_limit);
+	return length;
+}
+
+static ssize_t low_cap_limit_dual_get(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t length;
+	length = sprintf(buf, "%d\n", led_low_cap_limit_dual);
+	return length;
+}
+
+static DEVICE_ATTR(led_ril_status, 0644,
+	led_ril_status_get,
+	led_ril_status_set);
+
+static DEVICE_ATTR(led_wimax_status, 0644,
+	led_wimax_status_get,
+	led_wimax_status_set);
+
+static DEVICE_ATTR(led_hotspot_status, 0644,
+	led_hotspot_status_get,
+	led_hotspot_status_set);
+
+static DEVICE_ATTR(low_temp_limit, 0444,
+	low_temp_limit_get,
+	NULL);
+
+static DEVICE_ATTR(low_cap_limit, 0444,
+	low_cap_limit_get,
+	NULL);
+
+static DEVICE_ATTR(low_cap_limit_dual, 0444,
+	low_cap_limit_dual_get,
+	NULL);
+
+static int __init msm_led_trigger_sysfs_init(void)
+{
+	int ret = 0;
+
+	pr_info("[CAM][FL] %s:%d\n", __func__, __LINE__);
+
+	led_status_obj = kobject_create_and_add("camera_led_status", NULL);
+	if (led_status_obj == NULL) {
+		pr_info("[CAM][FL] msm_camera_led: subsystem_register failed\n");
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	ret = sysfs_create_file(led_status_obj,
+		&dev_attr_led_ril_status.attr);
+	if (ret) {
+		pr_err("[CAM][FL] msm_camera_led: sysfs_create_file dev_attr_led_ril_status failed\n");
+		ret = -EFAULT;
+		goto error;
+	}
+	ret = sysfs_create_file(led_status_obj,
+		&dev_attr_led_wimax_status.attr);
+	if (ret) {
+		pr_err("[CAM][FL] msm_camera_led: sysfs_create_file dev_attr_led_wimax_status failed\n");
+		ret = -EFAULT;
+		goto error;
+	}
+	ret = sysfs_create_file(led_status_obj,
+		&dev_attr_led_hotspot_status.attr);
+	if (ret) {
+		pr_err("[CAM][FL] msm_camera_led: sysfs_create_file dev_attr_led_hotspot_status failed\n");
+		ret = -EFAULT;
+		goto error;
+	}
+	ret = sysfs_create_file(led_status_obj,
+		&dev_attr_low_temp_limit.attr);
+	if (ret) {
+		pr_err("[CAM][FL] msm_camera_led: sysfs_create_file dev_attr_low_temp_limit failed\n");
+		ret = -EFAULT;
+		goto error;
+	}
+	ret = sysfs_create_file(led_status_obj,
+		&dev_attr_low_cap_limit.attr);
+	if (ret) {
+		pr_err("[CAM][FL] msm_camera_led: sysfs_create_file dev_attr_low_cap_limit failed\n");
+		ret = -EFAULT;
+		goto error;
+	}
+	ret = sysfs_create_file(led_status_obj,
+		&dev_attr_low_cap_limit_dual.attr);
+	if (ret) {
+		pr_err("[CAM][FL] msm_camera_led: sysfs_create_file dev_attr_low_cap_limit_dual failed\n");
+		ret = -EFAULT;
+		goto error;
+	}
+
+	pr_info("[CAM][FL] %s:%d ret %d\n", __func__, __LINE__, ret);
+	return ret;
+
+error:
+	kobject_del(led_status_obj);
+	return ret;
+
+}
+#endif //HTC_CAM_FEATURE_FLASH_RESTRICTION
+
 static int __init msm_flash_init_module(void)
 {
 	int32_t rc = 0;
@@ -1331,6 +1680,13 @@ static int __init msm_flash_init_module(void)
 	rc = platform_driver_register(&msm_flash_platform_driver);
 	if (rc)
 		pr_err("platform probe for flash failed");
+	//HTC_START, HTC_CAM_FEATURE_FLASH_RESTRICTION
+	else
+	{
+		rc = msm_led_trigger_sysfs_init();
+		pr_info("%s:%d rc %d\n", __func__, __LINE__, rc);
+	}
+	//HTC_END
 
 	return rc;
 }

@@ -1492,8 +1492,19 @@ static int find_num_channels(struct mixer_build *state, int dir)
 	int ctrlif = get_iface_desc(state->mixer->hostif)->bInterfaceNumber;
 	struct usb_interface *usb_iface	=
 			usb_ifnum_to_if(state->mixer->chip->dev, ctrlif);
+/*HTC_AUD_START - Klocwork */
+#if 0
 	struct usb_interface_assoc_descriptor *assoc = usb_iface->intf_assoc;
 	struct usb_host_interface *alts;
+#else
+	struct usb_interface_assoc_descriptor *assoc;
+	struct usb_host_interface *alts;
+
+	if (!usb_iface)
+		return num_ch;
+	assoc = usb_iface->intf_assoc;
+#endif
+/* HTC_AUD_END */
 
 	for (i = 0; i < assoc->bInterfaceCount; i++) {
 		int intf = assoc->bFirstInterface + i;
@@ -1501,7 +1512,10 @@ static int find_num_channels(struct mixer_build *state, int dir)
 		if (intf != ctrlif) {
 			struct usb_interface *iface =
 				usb_ifnum_to_if(state->mixer->chip->dev, intf);
-
+/* HTC_AUD_START - Klocwork */
+			if (!iface)
+				return num_ch;
+/* HTC_AUD_END */
 			alts = &iface->altsetting[1];
 			if (dir == USB_DIR_OUT &&
 				get_endpoint(alts, 0)->bEndpointAddress &
@@ -1600,8 +1614,17 @@ static int parse_audio_feature_unit(struct mixer_build *state, int unitid,
 		struct usb_interface *usb_iface	=
 			usb_ifnum_to_if(state->mixer->chip->dev,
 			get_iface_desc(state->mixer->hostif)->bInterfaceNumber);
+/* HTC_AUD_START - Klocwork */
+#if 0
 		struct usb_interface_assoc_descriptor *assoc =
 							usb_iface->intf_assoc;
+#else
+		struct usb_interface_assoc_descriptor *assoc;
+		if (!usb_iface)
+			return -EINVAL;
+		assoc = usb_iface->intf_assoc;
+#endif
+/* HTC_AUD_END */
 
 		csize = 4;
 		switch (unitid) {
@@ -1689,8 +1712,17 @@ static int parse_audio_feature_unit(struct mixer_build *state, int unitid,
 		struct usb_interface *usb_iface	=
 			usb_ifnum_to_if(state->mixer->chip->dev,
 			get_iface_desc(state->mixer->hostif)->bInterfaceNumber);
+/* HTC_AUD_START - Klocwork */
+#if 0
 		struct usb_interface_assoc_descriptor *assoc =
 			usb_iface->intf_assoc;
+#else
+		struct usb_interface_assoc_descriptor *assoc;
+		if (!usb_iface)
+			return -EINVAL;
+		assoc = usb_iface->intf_assoc;
+#endif
+/* HTC_AUD_END */
 
 		switch (unitid) {
 		case BADD_FU_ID_BAOF:
@@ -2546,8 +2578,17 @@ static int snd_usb_mixer_controls(struct usb_mixer_interface *mixer)
 		struct usb_interface *usb_iface	=
 			usb_ifnum_to_if(mixer->chip->dev,
 			get_iface_desc(mixer->hostif)->bInterfaceNumber);
+/* HTC_AUD_START - Klocwork */
+#if 0
 		struct usb_interface_assoc_descriptor *assoc =
 			usb_iface->intf_assoc;
+#else
+		struct usb_interface_assoc_descriptor *assoc;
+		if (!usb_iface)
+			return -EINVAL;
+		assoc = usb_iface->intf_assoc;
+#endif
+/* HTC_AUD_END */
 
 		switch (assoc->bFunctionSubClass) {
 		case PROF_GENERIC_IO: {

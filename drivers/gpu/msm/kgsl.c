@@ -3079,6 +3079,7 @@ static struct kgsl_mem_entry *gpumem_alloc_entry(
 	flags = kgsl_filter_cachemode(flags);
 
 	entry = kgsl_mem_entry_create();
+
 	if (entry == NULL)
 		return ERR_PTR(-ENOMEM);
 

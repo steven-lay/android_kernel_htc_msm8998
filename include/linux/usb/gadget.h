@@ -296,6 +296,7 @@ struct usb_ep_caps {
 
 struct usb_ep {
 	void			*driver_data;
+	bool			is_ncm;
 
 	const char		*name;
 	const struct usb_ep_ops	*ops;
@@ -753,6 +754,7 @@ struct usb_gadget {
 	unsigned			deactivated:1;
 	unsigned			connected:1;
 	bool                            remote_wakeup;
+	int				miMaxMtu;
 };
 #define work_to_gadget(w)	(container_of((w), struct usb_gadget, work))
 
@@ -1555,5 +1557,9 @@ extern void usb_ep_autoconfig_reset(struct usb_gadget *);
 extern struct usb_ep *usb_ep_autoconfig_by_name(struct usb_gadget *,
 			struct usb_endpoint_descriptor *,
 			const char *ep_name);
+
+enum {
+	PROPERTY_CHG_STATUS = 0,
+};
 
 #endif /* __LINUX_USB_GADGET_H */

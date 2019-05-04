@@ -39,6 +39,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/wait.h>
+#include <linux/htc_flags.h>
 
 #define UART_MR1			0x0000
 
@@ -1765,6 +1766,8 @@ static const struct of_device_id msm_uartdm_table[] = {
 	{ }
 };
 
+static int msm_serial_hsl_enable;
+
 static int msm_serial_probe(struct platform_device *pdev)
 {
 	struct msm_port *msm_port;
@@ -1772,6 +1775,11 @@ static int msm_serial_probe(struct platform_device *pdev)
 	struct uart_port *port;
 	const struct of_device_id *id;
 	int irq, line;
+
+	if (!msm_serial_hsl_enable) {
+		pr_info("serial console disabled, do not proceed msm_serial_probe().\n");
+		return -ENODEV;
+	}
 
 	if (pdev->dev.of_node)
 		line = of_alias_get_id(pdev->dev.of_node, "serial");
@@ -1877,6 +1885,10 @@ static struct platform_driver msm_platform_driver = {
 static int __init msm_serial_init(void)
 {
 	int ret;
+
+	/* Switch Uart Debug by Kernel Flag  */
+	if (get_kernel_flag() & KERNEL_FLAG_SERIAL_HSL_ENABLE)
+		msm_serial_hsl_enable = 1;
 
 	ret = uart_register_driver(&msm_uart_driver);
 	if (unlikely(ret))

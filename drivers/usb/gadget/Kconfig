@@ -232,6 +232,15 @@ config USB_F_QDSS
 config USB_F_CCID
 	tristate
 
+config USB_F_MIRRORLINK
+	tristate
+
+config USB_F_AUTOBOT
+	tristate
+
+config USB_F_CHARGER
+	tristate
+
 choice
 	tristate "USB Gadget Drivers"
 	default USB_ETH
@@ -572,6 +581,27 @@ config USB_CONFIGFS_F_CCID
 	help
 	  USB CCID function driver creats transport layer between the
 	  userspace CCID component and the Windows Host.
+
+config USB_CONFIGFS_F_MIRRORLINK
+	bool "USB projector Mirrorlink function"
+	select USB_F_MIRRORLINK
+	depends on USB_CONFIGFS
+	help
+	  USB Mirrorlink function driver to support projector over USB.
+
+config USB_CONFIGFS_F_AUTOBOT
+	bool "USB projector Autobot function"
+	select USB_F_AUTOBOT
+	depends on USB_CONFIGFS
+	help
+	  USB AUTOBOT function driver to support projector over USB.
+
+config USB_CONFIGFS_F_CHARGER
+	bool "USB charger function"
+	select USB_F_CHARGER
+	depends on USB_CONFIGFS
+	help
+	  USB Charger Funcion driver to support charging over USB
 
 source "drivers/usb/gadget/legacy/Kconfig"
 

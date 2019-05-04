@@ -297,7 +297,7 @@ static const struct device_attribute *drv_attr_list[] = {
 	&dev_attr_secure_max,
 	&dev_attr_mapped,
 	&dev_attr_mapped_max,
-	&dev_attr_full_cache_threshold,
+	&dev_attr_full_cache_threshold,    
 	NULL
 };
 
@@ -441,7 +441,6 @@ static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 		kgsl_pool_free_pages(memdesc->pages, memdesc->page_count);
 	else
 		kgsl_pool_free_sgt(memdesc->sgt);
-
 }
 
 /*

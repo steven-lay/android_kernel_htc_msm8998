@@ -1,0 +1,5 @@
+config HTC_LOGLEVEL
+    bool "HTC log level"
+    default y
+    help
+      Say yes to enable get log level.

@@ -25,6 +25,7 @@
 #include <linux/delay.h>
 #include <linux/input/qpnp-power-on.h>
 #include <linux/of_address.h>
+#include <linux/console.h>
 
 #include <asm/cacheflush.h>
 #include <asm/system_misc.h>
@@ -34,6 +35,8 @@
 #include <soc/qcom/restart.h>
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
+
+#include "htc_restart_handler.h"
 
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
@@ -50,7 +53,6 @@
 #define SCM_DLOAD_BOTHDUMPS	(SCM_DLOAD_MINIDUMP | SCM_DLOAD_FULLDUMP)
 
 static int restart_mode;
-static void *restart_reason;
 static bool scm_pmic_arbiter_disable_supported;
 static bool scm_deassert_ps_hold_supported;
 /* Download mode master kill-switch */
@@ -63,6 +65,21 @@ static void scm_disable_sdi(void);
  * So the SDI cannot be re-enabled when it already by-passed.
 */
 
+static int in_panic;
+
+static int panic_prep_restart(struct notifier_block *this,
+			      unsigned long event, void *ptr)
+{
+	in_panic = 1;
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block panic_blk = {
+	.notifier_call	= panic_prep_restart,
+};
+
+static int is_warm_reset = 0;
+
 #ifdef CONFIG_QCOM_DLOAD_MODE
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
 #define DL_MODE_PROP "qcom,msm-imem-download_mode"
@@ -70,7 +87,6 @@ static void scm_disable_sdi(void);
 #define KASLR_OFFSET_PROP "qcom,msm-imem-kaslr_offset"
 #endif
 
-static int in_panic;
 static int dload_type = SCM_DLOAD_FULLDUMP;
 static int download_mode = 1;
 static struct kobject dload_kobj;
@@ -99,17 +115,6 @@ struct reset_attribute {
 
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
-
-static int panic_prep_restart(struct notifier_block *this,
-			      unsigned long event, void *ptr)
-{
-	in_panic = 1;
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block panic_blk = {
-	.notifier_call	= panic_prep_restart,
-};
 
 int scm_set_dload_mode(int arg1, int arg2)
 {
@@ -244,6 +249,30 @@ void msm_set_restart_mode(int mode)
 }
 EXPORT_SYMBOL(msm_set_restart_mode);
 
+static void msm_flush_console(void)
+{
+	unsigned long flags;
+
+	printk("\n");
+	printk(KERN_EMERG "[K] Restarting %s\n", linux_banner);
+	if (console_trylock()) {
+		console_unlock();
+		return;
+	}
+
+	mdelay(50);
+
+	local_irq_save(flags);
+
+	if (console_trylock())
+		printk(KERN_EMERG "[K] restart: Console was locked! Busting\n");
+	else
+		printk(KERN_EMERG "[K] restart: Console was locked!\n");
+	console_unlock();
+
+	local_irq_restore(flags);
+}
+
 /*
  * Force the SPMI PMIC arbiter to shutdown so that no more SPMI transactions
  * are sent from the MSM to the PMIC.  This is required in order to avoid an
@@ -268,7 +297,38 @@ static void halt_spmi_pmic_arbiter(void)
 	}
 }
 
-static void msm_restart_prepare(const char *cmd)
+static enum pon_power_off_type htc_restart_cmd_to_type(const char* cmd)
+{
+        int i;
+
+        struct {
+                const char* cmd;
+                enum pon_power_off_type type;
+        } cmd_type[] = {
+                {"power-key-force-hard", PON_POWER_OFF_WARM_RESET},
+                {"force-dog-bark", PON_POWER_OFF_WARM_RESET},
+                        /* OEM RIL fatal: oem-95, 96, 98, 99 */
+                {"oem-93", PON_POWER_OFF_WARM_RESET},
+                {"oem-94", PON_POWER_OFF_WARM_RESET},
+                {"oem-95", PON_POWER_OFF_WARM_RESET},
+                {"oem-96", PON_POWER_OFF_WARM_RESET},
+                {"oem-97", PON_POWER_OFF_WARM_RESET},
+                {"oem-98", PON_POWER_OFF_WARM_RESET},
+                {"oem-99", PON_POWER_OFF_WARM_RESET},
+        };
+
+        if (in_panic)
+                return PON_POWER_OFF_WARM_RESET;
+
+        cmd = cmd ? : "";
+        for (i = 0; i < ARRAY_SIZE(cmd_type); i++)
+                if (!strncmp(cmd, cmd_type[i].cmd, strlen(cmd_type[i].cmd)))
+                        return cmd_type[i].type;
+
+        return PON_POWER_OFF_HARD_RESET; /* default reset type */
+}
+
+static void msm_restart_prepare(char mode, const char *cmd)
 {
 	bool need_warm_reset = false;
 
@@ -280,8 +340,11 @@ static void msm_restart_prepare(const char *cmd)
 	 */
 
 	set_dload_mode(download_mode &&
-			(in_panic || restart_mode == RESTART_DLOAD));
+			(in_panic || restart_mode == RESTART_DLOAD ||
+				htc_restart_cmd_to_type(cmd) == PON_POWER_OFF_WARM_RESET));
 #endif
+
+	pr_info("%s: restart by command: [%s]\r\n", __func__, (cmd) ? cmd : "");
 
 	if (qpnp_pon_check_hard_reset_stored()) {
 		/* Set warm reset as true when device is in dload mode */
@@ -291,55 +354,67 @@ static void msm_restart_prepare(const char *cmd)
 			need_warm_reset = true;
 	} else {
 		need_warm_reset = (get_dload_mode() ||
-				(cmd != NULL && cmd[0] != '\0'));
+				(htc_restart_cmd_to_type(cmd) == PON_POWER_OFF_WARM_RESET));
 	}
 
 	/* Hard reset the PMIC unless memory contents must be maintained. */
 	if (need_warm_reset) {
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+		is_warm_reset = 1;
 	} else {
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 	}
 
-	if (cmd != NULL) {
+	if (in_panic){
+		/* KP, do not overwrite the restart reason */
+	} else if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_BOOTLOADER);
-			__raw_writel(0x77665500, restart_reason);
+			set_restart_action(RESTART_REASON_BOOTLOADER, NULL);
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_RECOVERY);
-			__raw_writel(0x77665502, restart_reason);
+			set_restart_action(RESTART_REASON_RECOVERY, NULL);
+		} else if (!strcmp(cmd, "eraseflash")) {
+			set_restart_action(RESTART_REASON_ERASE_FLASH, NULL);
 		} else if (!strcmp(cmd, "rtc")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_RTC);
-			__raw_writel(0x77665503, restart_reason);
+			set_restart_action(RESTART_REASON_ALARM, "Alarm");
 		} else if (!strcmp(cmd, "dm-verity device corrupted")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_DMVERITY_CORRUPTED);
-			__raw_writel(0x77665508, restart_reason);
+			set_restart_action(RESTART_REASON_DM_VERITY_DEVICE_CORRUPTED, "DM verity device corrupted");
 		} else if (!strcmp(cmd, "dm-verity enforcing")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_DMVERITY_ENFORCE);
-			__raw_writel(0x77665509, restart_reason);
+			set_restart_action(RESTART_REASON_DM_VERITY_ENFORCING, "DM verity enforcing");
 		} else if (!strcmp(cmd, "keys clear")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_KEYS_CLEAR);
-			__raw_writel(0x7766550a, restart_reason);
+			set_restart_action(RESTART_REASON_KEYS_CLEAR, "Keys clear");
 		} else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned long code;
 			int ret;
 			ret = kstrtoul(cmd + 4, 16, &code);
 			if (!ret)
-				__raw_writel(0x6f656d00 | (code & 0xff),
-					     restart_reason);
+				set_restart_to_oem(code, NULL);
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
+                } else if (!strncmp(cmd, "download", 8 )) {
+                        set_restart_action(0x6f656d00 | 0xe0, NULL);
+                } else if (!strncmp(cmd, "ftm", 3)) {
+                        set_restart_action(0x6f656d00 | 0xe1, NULL);
+
 		} else {
-			__raw_writel(0x77665501, restart_reason);
+			set_restart_action(RESTART_REASON_REBOOT, NULL);
 		}
+	} else {
+		set_restart_action(RESTART_REASON_REBOOT, NULL);
 	}
 
+	msm_flush_console();
 	flush_cache_all();
 
 	/*outer_flush_all is not supported by 64bit kernel*/
@@ -375,9 +450,9 @@ static void deassert_ps_hold(void)
 
 static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 {
-	pr_notice("Going down for restart now\n");
+	pr_notice("[K] Going down for restart now\n");
 
-	msm_restart_prepare(cmd);
+	msm_restart_prepare((char)reboot_mode, cmd);
 
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	/*
@@ -385,7 +460,7 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 	 * device will take the usual restart path.
 	 */
 
-	if (WDOG_BITE_ON_PANIC && in_panic)
+	if ((WDOG_BITE_ON_PANIC && in_panic) || is_warm_reset)
 		msm_trigger_wdog_bite();
 #endif
 
@@ -398,7 +473,7 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 
 static void do_msm_poweroff(void)
 {
-	pr_notice("Powering off the SoC\n");
+	pr_notice("[K] Powering off the SoC\n");
 
 	set_dload_mode(0);
 	scm_disable_sdi();
@@ -545,14 +620,23 @@ static int msm_restart_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct resource *mem;
+#ifdef CONFIG_QCOM_DLOAD_MODE
 	struct device_node *np;
+#endif
 	int ret = 0;
+
+	ret = htc_restart_handler_init();
+	if (ret) {
+		pr_err("htc restart handler init fail\n");
+		goto err_htc_restart_handle;
+	}
+
+	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	if (scm_is_call_available(SCM_SVC_BOOT, SCM_DLOAD_CMD) > 0)
 		scm_dload_supported = true;
 
-	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 	np = of_find_compatible_node(NULL, NULL, DL_MODE_PROP);
 	if (!np) {
 		pr_err("unable to find DT imem DLOAD mode node\n");
@@ -621,19 +705,6 @@ static int msm_restart_probe(struct platform_device *pdev)
 	}
 skip_sysfs_create:
 #endif
-	np = of_find_compatible_node(NULL, NULL,
-				"qcom,msm-imem-restart_reason");
-	if (!np) {
-		pr_err("unable to find DT imem restart reason node\n");
-	} else {
-		restart_reason = of_iomap(np, 0);
-		if (!restart_reason) {
-			pr_err("unable to map imem restart reason offset\n");
-			ret = -ENOMEM;
-			goto err_restart_reason;
-		}
-	}
-
 	mem = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pshold-base");
 	msm_ps_hold = devm_ioremap_resource(dev, mem);
 	if (IS_ERR(msm_ps_hold))
@@ -660,11 +731,11 @@ skip_sysfs_create:
 #endif
 	return 0;
 
-err_restart_reason:
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	iounmap(emergency_dload_mode_addr);
 	iounmap(dload_mode_addr);
 #endif
+err_htc_restart_handle:
 	return ret;
 }
 

@@ -130,7 +130,6 @@ int qti_pfk_ice_set_key(uint32_t index, uint8_t *key, uint8_t *salt,
 			scm_call2(smc_id, &desc);
 		}
 	}
-
 	ret = qcom_ice_setup_ice_hw((const char *)s_type, false);
 out:
 	return ret;

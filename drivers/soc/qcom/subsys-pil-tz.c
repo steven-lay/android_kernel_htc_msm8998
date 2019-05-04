@@ -26,6 +26,11 @@
 #include <linux/msm-bus.h>
 #include <linux/dma-mapping.h>
 #include <linux/highmem.h>
+/* HTC_AUD_START */
+#if defined(CONFIG_HTC_FEATURES_SSR)
+#include <linux/htc_flags.h>
+#endif
+/* HTC_AUD_END */
 
 #include <soc/qcom/subsystem_restart.h>
 #include <soc/qcom/ramdump.h>
@@ -1146,6 +1151,55 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 		goto err_subsys;
 	}
 	d->desc.subsys_dev = d->subsys;
+
+/* HTC_AUD_START */
+#if defined(CONFIG_HTC_FEATURES_SSR)
+	/*LPASS restart condition and ramdump rule would follow below
+	1.LPASS restart default enable
+	- flag [6] 0,   [8] 0 -> enable restart, no ramdump
+	- flag [6] 20,  [8] 0 -> reboot
+	- flag [6] 20,  [8] 8 -> disable restart, go DL mode
+	- flag [6] 0,   [8] 8 -> enable restart, online ramdump
+	2.LPASS restart default disable
+	- flag [6] 0,   [8] 0 -> reboot
+	- flag [6] 20,  [8] 0 -> enable restart, no ramdump
+	- flag [6] 20,  [8] 8 -> enable restart, online ramdump
+	- flag [6] 0,   [8] 8 -> disable restart, go DL mode
+	3. Always disable LPASS SSR if boot_mode != normal
+	*/
+	if(!strcmp(d->desc.name, "adsp")) {
+#if defined(CONFIG_HTC_FEATURES_SSR_LPASS_ENABLE)
+		if (get_kernel_flag() & (KERNEL_FLAG_ENABLE_SSR_LPASS)) {
+			pr_info("%s: CONFIG_HTC_FEATURES_SSR_LPASS_ENABLE, KERNEL_FLAG_ENABLE_SSR_LPASS, RESET_SOC.\n", __func__);
+			subsys_set_restart_level(d->subsys, RESET_SOC);
+			subsys_set_enable_ramdump(d->subsys, DISABLE_RAMDUMP);
+		} else {
+			pr_info("%s: CONFIG_HTC_FEATURES_SSR_LPASS_ENABLE, RESET_SUBSYS_COUPLED.\n", __func__);
+			subsys_set_restart_level(d->subsys, RESET_SUBSYS_COUPLED);
+#if 1
+			if (get_radio_flag() & BIT(3))
+				subsys_set_enable_ramdump(d->subsys, ENABLE_RAMDUMP);
+			else
+				subsys_set_enable_ramdump(d->subsys, DISABLE_RAMDUMP);
+#endif
+		}
+#else
+		if (get_kernel_flag() & (KERNEL_FLAG_ENABLE_SSR_LPASS)) {
+			pr_info("%s: KERNEL_FLAG_ENABLE_SSR_LPASS, RESET_SUBSYS_COUPLED.\n", __func__);
+			subsys_set_restart_level(d->subsys, RESET_SUBSYS_COUPLED);
+			if (get_radio_flag() & BIT(3))
+				subsys_set_enable_ramdump(d->subsys, ENABLE_RAMDUMP);
+			else
+				subsys_set_enable_ramdump(d->subsys, DISABLE_RAMDUMP);
+		} else {
+			pr_info("%s: RESET_SOC.\n", __func__);
+			subsys_set_restart_level(d->subsys, RESET_SOC);
+			subsys_set_enable_ramdump(d->subsys, DISABLE_RAMDUMP);
+		}
+#endif
+	}
+#endif
+/* HTC_AUD_END */
 
 	return 0;
 err_subsys:

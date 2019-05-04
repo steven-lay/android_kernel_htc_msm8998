@@ -720,6 +720,8 @@ static int devfreq_bw_hwmon_get_freq(struct devfreq *df,
 {
 	struct hwmon_node *node = df->data;
 
+	if (NULL == node) return 0;
+
 	/* Suspend/resume sequence */
 	if (!node->mon_started) {
 		*freq = node->resume_freq;

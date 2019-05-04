@@ -1050,6 +1050,8 @@ struct dwc3 {
 
 	wait_queue_head_t	wait_linkstate;
 	bool			create_reg_debugfs;
+	bool                    usb_disable;
+	void                    (*notify_usb_disabled)(void);
 };
 
 /* -------------------------------------------------------------------------- */

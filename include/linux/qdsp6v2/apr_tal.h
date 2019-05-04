@@ -31,7 +31,12 @@
 
 #if defined(CONFIG_MSM_QDSP6_APRV2_GLINK) || \
 	defined(CONFIG_MSM_QDSP6_APRV3_GLINK)
+/* HTC_AUD_START - AS HS */
+#if 0
 #define APR_MAX_BUF			512
+#else
+#define APR_MAX_BUF			2048
+#endif
 #else
 #define APR_MAX_BUF			8092
 #endif

@@ -17,6 +17,12 @@
 #include "msm_sd.h"
 #include "msm_cci.h"
 #include "msm_eeprom.h"
+/*HTC_START*/
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+#include "msm_sensor.h"
+#include "lc898123F40_htc.h"
+#endif
+/*HTC_END*/
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
@@ -25,6 +31,116 @@ DEFINE_MSM_MUTEX(msm_eeprom_mutex);
 #ifdef CONFIG_COMPAT
 static struct v4l2_file_operations msm_eeprom_v4l2_subdev_fops;
 #endif
+
+/*HTC_START*/
+int eeprom_write_htc(struct msm_eeprom_ctrl_t *e_ctrl,
+	void __user *argp)
+{
+	int rc =  0;
+	int i,j;
+	uint16_t tempsid;
+	struct msm_eeprom_cfg_data32 *cdata32 = argp;
+	struct msm_eeprom_mem_map_t *eeprom_map;
+	struct msm_eeprom_memory_map_array *mem_map_array = NULL;
+
+	mem_map_array =
+		kzalloc(sizeof(struct msm_eeprom_memory_map_array),
+			GFP_KERNEL);
+	pr_info("[EEPROM][write] prepare to write flash data to eeprom\n");
+	if (mem_map_array == NULL) {
+		pr_err("%s:%d[EEPROM][write] Mem Alloc Fail\n", __func__, __LINE__);
+		rc = -ENOMEM;
+		goto free_mem;
+	}
+	if (copy_from_user(mem_map_array,
+		(void *)compat_ptr(cdata32->cfg.eeprom_info.mem_map_array),
+		sizeof(struct msm_eeprom_memory_map_array))) {
+		pr_err("%s:%d[EEPROM][write] copy_from_user failed for memory map\n",
+			__func__, __LINE__);
+		goto free_mem;
+	}
+
+	for (j = 0; j < mem_map_array->msm_size_of_max_mappings; j++) {
+		#ifdef CONFIG_OIS_LC898123F40_4AXIS
+		// for concatenate uint16 to uint32
+		unsigned int write_data[32] = { 0 };
+		unsigned int write_addr[32] = { 0 };
+		int write_word_cnt = 0;
+		#endif
+
+		eeprom_map = &(mem_map_array->memory_map[j]);
+		if (e_ctrl->i2c_client.cci_client) {
+			tempsid = e_ctrl->i2c_client.cci_client->sid;
+			e_ctrl->i2c_client.cci_client->sid =
+				mem_map_array->memory_map[j].slave_addr >> 1;
+		} else if (e_ctrl->i2c_client.client) {
+			tempsid = e_ctrl->i2c_client.client->addr;
+			e_ctrl->i2c_client.client->addr =
+				mem_map_array->memory_map[j].slave_addr >> 1;
+		}
+
+		for (i = 0; i < mem_map_array->memory_map[j].memory_map_size; i++)
+		{
+			switch (eeprom_map->mem_settings[i].i2c_operation) {
+			case MSM_CAM_WRITE: {
+				e_ctrl->i2c_client.addr_type =
+					eeprom_map->mem_settings[i].addr_type;
+				#ifdef CONFIG_OIS_LC898123F40_4AXIS
+				if(eeprom_map->mem_settings[i].data_type == MSM_CAMERA_I2C_WORD_DATA){
+					pr_info("[EEPROM][write] cnt:%d 0x%x => 0x%x\n",write_word_cnt, eeprom_map->mem_settings[i].reg_addr, eeprom_map->mem_settings[i].reg_data);
+					if (write_word_cnt % 2 == 0) {
+						write_addr[write_word_cnt / 2] = eeprom_map->mem_settings[i].reg_addr;
+						write_data[write_word_cnt / 2] = eeprom_map->mem_settings[i].reg_data << 16;
+					} else
+						write_data[write_word_cnt / 2] |= eeprom_map->mem_settings[i].reg_data;
+					write_word_cnt++;
+				} else {
+				#endif
+				pr_info("[EEPROM][write] addr:0x%x data:0x%X\n", eeprom_map->mem_settings[i].reg_addr, eeprom_map->mem_settings[i].reg_data);
+				rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write(
+					&(e_ctrl->i2c_client),
+					eeprom_map->mem_settings[i].reg_addr,
+					eeprom_map->mem_settings[i].reg_data,
+					eeprom_map->mem_settings[i].data_type);
+				msleep(eeprom_map->mem_settings[i].delay);
+				if (rc < 0) {
+					pr_err("%s:[EEPROM][write] page write failed\n",
+						__func__);
+					goto free_mem;
+				}
+				#ifdef CONFIG_OIS_LC898123F40_4AXIS
+				}
+				#endif
+			}
+			break;
+			default:
+				pr_err("%s: %d[EEPROM][write] Invalid i2c operation LC:%d\n",
+					__func__, __LINE__, i);
+				return -EINVAL;
+			}
+		}
+		#ifdef CONFIG_OIS_LC898123F40_4AXIS
+		for (i = 0; i < write_word_cnt / 2; i++) {
+			htc_ext_FlashInt32Write(&(e_ctrl->i2c_client), write_addr[i], write_data[i]);
+			msleep(1);
+		}
+		#endif
+
+		if (e_ctrl->i2c_client.cci_client) {
+			e_ctrl->i2c_client.cci_client->sid =
+				tempsid;
+		} else if (e_ctrl->i2c_client.client) {
+			e_ctrl->i2c_client.client->addr =
+				tempsid;
+		}
+	}
+	pr_info("[EEPROM][write] finished write flash data to eeprom\n");
+free_mem:
+	kfree(mem_map_array);
+	mem_map_array = NULL;
+	return rc;
+}
+/*HTC_END*/
 
 /**
   * msm_get_read_mem_size - Get the total size for allocation
@@ -392,11 +508,23 @@ static int eeprom_parse_memory_map(struct msm_eeprom_ctrl_t *e_ctrl,
 			case MSM_CAM_READ: {
 				e_ctrl->i2c_client.addr_type =
 					eeprom_map->mem_settings[i].addr_type;
+				/*HTC_START*/
+				#ifdef CONFIG_OIS_LC898123F40_4AXIS
+				if(eeprom_map->mem_settings[i].data_type == MSM_CAMERA_I2C_DWORD_DATA){
+					htc_ext_FlashSectorRead(&(e_ctrl->i2c_client), memptr, eeprom_map->mem_settings[i].reg_addr, (eeprom_map->mem_settings[i].reg_data));
+				}else{
+				#endif
+				/*HTC_END*/
 				rc = e_ctrl->i2c_client.i2c_func_tbl->
 					i2c_read_seq(&(e_ctrl->i2c_client),
 					eeprom_map->mem_settings[i].reg_addr,
 					memptr,
 					eeprom_map->mem_settings[i].reg_data);
+				/*HTC_START*/
+				#ifdef CONFIG_OIS_LC898123F40_4AXIS
+				}
+				#endif
+				/*HTC_END*/
 				msleep(eeprom_map->mem_settings[i].delay);
 				if (rc < 0) {
 					pr_err("%s: read failed\n",
@@ -674,6 +802,11 @@ static int msm_eeprom_config(struct msm_eeprom_ctrl_t *e_ctrl,
 				__func__, __LINE__);
 		}
 		break;
+/*HTC_START*/
+	case CFG_EEPROM_WRITE_DATA:
+		rc = eeprom_write_htc(e_ctrl, argp);
+		break;
+/*HTC_END*/
 	default:
 		break;
 	}
@@ -1534,6 +1667,11 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 				__func__, __LINE__);
 		}
 		break;
+/*HTC_START*/
+	case CFG_EEPROM_WRITE_DATA:
+		rc = eeprom_write_htc(e_ctrl, argp);
+		break;
+/*HTC_END*/
 	default:
 		break;
 	}

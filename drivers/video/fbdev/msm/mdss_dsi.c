@@ -34,6 +34,7 @@
 #include "mdss_debug.h"
 #include "mdss_dsi_phy.h"
 #include "mdss_dba_utils.h"
+#include "mdss_htc_util.h"
 
 #define CMDLINE_DSI_CTL_NUM_STRING_LEN 2
 
@@ -363,6 +364,9 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev,
 	return rc;
 }
 
+#ifdef CONFIG_NANOHUB_FLASH_STATUS_CHECK
+extern uint8_t nanohub_flash_status_check(void);
+#endif
 static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 {
 	int ret = 0;
@@ -383,15 +387,27 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		ret = 0;
 	}
 
-	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+	send_dsi_status_notify(LCM_EARLY_POWERDOWN);
+	/* HTC: At power off stage, move pin contrl function behind power off sequence */
+	/* if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
 		pr_debug("reset disable: pinctrl not enabled\n");
-
+	*/
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 0);
 	if (ret)
 		pr_err("%s: failed to disable vregs for %s\n",
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+	send_dsi_status_notify(LCM_POWERDOWN);
+
+#ifdef CONFIG_NANOHUB_FLASH_STATUS_CHECK
+	if(nanohub_flash_status_check())
+		goto end;
+#endif
+
+	/* HTC: At power off stage, move pin contrl function behind power off sequenc */
+	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+		pr_debug("reset disable: pinctrl not enabled\n");
 
 end:
 	return ret;
@@ -410,6 +426,10 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+	/* HTC: At power on stage, use pin contrl function before starting power on sequence */
+	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+		pr_debug("reset disable: pinctrl not enabled\n");
+
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 1);
@@ -419,6 +439,8 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		return ret;
 	}
 
+	send_dsi_status_notify(LCM_POWERON);
+
 	/*
 	 * If continuous splash screen feature is enabled, then we need to
 	 * request all the GPIOs that have already been configured in the
@@ -427,8 +449,10 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	 */
 	if (pdata->panel_info.cont_splash_enabled ||
 		!pdata->panel_info.mipi.lp11_init) {
-		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+		/* HTC: At power on stage, use pin contrl function before starting power on sequence */
+		/* if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
 			pr_debug("reset enable: pinctrl not enabled\n");
+		*/
 
 		ret = mdss_dsi_panel_reset(pdata, 1);
 		if (ret)
@@ -479,6 +503,7 @@ static int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 		if ((pinfo->panel_power_state != MDSS_PANEL_POWER_LCD_DISABLED)
 		     && (pinfo->panel_power_state != MDSS_PANEL_POWER_OFF))
 			ret = mdss_dsi_panel_power_off(pdata);
+
 		break;
 	case MDSS_PANEL_POWER_ON:
 		if (mdss_dsi_is_panel_on_lp(pdata))
@@ -1561,8 +1586,10 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	 * data lanes for LP11 init
 	 */
 	if (mipi->lp11_init) {
-		if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
+		/* HTC: At power on stage, use pin contrl function before starting power on sequence */
+		/* if (mdss_dsi_pinctrl_set_state(ctrl_pdata, true))
 			pr_debug("reset enable: pinctrl not enabled\n");
+		*/
 		mdss_dsi_panel_reset(pdata, 1);
 	}
 
@@ -1590,6 +1617,11 @@ static int mdss_dsi_pinctrl_set_state(
 		return PTR_ERR(ctrl_pdata->pin_res.pinctrl);
 
 	pinfo = &ctrl_pdata->panel_data.panel_info;
+
+	/* HTC: skip pin contrl while device boot up */
+	if (pinfo->cont_splash_enabled)
+		return 0;
+
 	if ((mdss_dsi_is_right_ctrl(ctrl_pdata) &&
 		mdss_dsi_is_hw_config_split(ctrl_pdata->shared_data)) ||
 			pinfo->is_dba_panel) {
@@ -1684,6 +1716,7 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 	if (!(ctrl_pdata->ctrl_state & CTRL_STATE_PANEL_INIT)) {
 		if (!pdata->panel_info.dynamic_switch_pending) {
 			ATRACE_BEGIN("dsi_panel_on");
+			htc_vreg_vol_switch(ctrl_pdata, true);
 			ret = ctrl_pdata->on(pdata);
 			if (ret) {
 				pr_err("%s: unable to initialize the panel\n",
@@ -1697,8 +1730,11 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 	if ((pdata->panel_info.type == MIPI_CMD_PANEL) &&
 		mipi->vsync_enable && mipi->hw_vsync_mode) {
 		mdss_dsi_set_tear_on(ctrl_pdata);
+#if 0
+		/* VSYNC_GPIO irq was managed by mdss_dsi_status */
 		if (mdss_dsi_is_te_based_esd(ctrl_pdata))
 			enable_irq(gpio_to_irq(ctrl_pdata->disp_te_gpio));
+#endif
 	}
 
 	ctrl_pdata->ctrl_state |= CTRL_STATE_PANEL_INIT;
@@ -1768,11 +1804,14 @@ static int mdss_dsi_blank(struct mdss_panel_data *pdata, int power_state)
 
 	if ((pdata->panel_info.type == MIPI_CMD_PANEL) &&
 		mipi->vsync_enable && mipi->hw_vsync_mode) {
+#if 0
+		/* VSYNC_GPIO irq was managed by mdss_dsi_status */
 		if (mdss_dsi_is_te_based_esd(ctrl_pdata)) {
-				disable_irq(gpio_to_irq(
-					ctrl_pdata->disp_te_gpio));
-				atomic_dec(&ctrl_pdata->te_irq_ready);
+			disable_irq(gpio_to_irq(
+				ctrl_pdata->disp_te_gpio));
+			atomic_set(&ctrl_pdata->te_irq_ready, 0);
 		}
+#endif
 		mdss_dsi_set_tear_off(ctrl_pdata);
 	}
 
@@ -1780,6 +1819,7 @@ static int mdss_dsi_blank(struct mdss_panel_data *pdata, int power_state)
 		if (!pdata->panel_info.dynamic_switch_pending) {
 			ATRACE_BEGIN("dsi_panel_off");
 			ret = ctrl_pdata->off(pdata);
+			htc_vreg_vol_switch(ctrl_pdata, false);
 			if (ret) {
 				pr_err("%s: Panel OFF failed\n", __func__);
 				goto error;
@@ -3676,6 +3716,7 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 		}
 		te_irq_registered = 1;
 		disable_irq(gpio_to_irq(ctrl_pdata->disp_te_gpio));
+		te_irq_registered = 1;
 	}
 
 	pdata = &ctrl_pdata->panel_data;
@@ -4765,6 +4806,8 @@ int dsi_panel_device_register(struct platform_device *ctrl_pdev,
 
 	panel_debug_register_base("panel",
 		ctrl_pdata->ctrl_base, ctrl_pdata->reg_size);
+
+	htc_vreg_init(ctrl_pdev, ctrl_pdata);
 
 	pr_debug("%s: Panel data initialized\n", __func__);
 	return 0;

@@ -62,6 +62,8 @@
 #define CREATE_TRACE_POINTS
 #include "trace/lowmemorykiller.h"
 
+#define HOME_APP_ADJ 411  // oom_adj 7
+
 static uint32_t lowmem_debug_level = 1;
 static short lowmem_adj[6] = {
 	0,
@@ -404,6 +406,8 @@ void tune_lmk_param(int *other_free, int *other_file, struct shrink_control *sc)
 	}
 }
 
+#define REVERT_ADJ(x)  (x * (-OOM_DISABLE + 1) / OOM_SCORE_ADJ_MAX)
+
 static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 {
 	struct task_struct *tsk;
@@ -425,10 +429,11 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 
 	other_free = global_page_state(NR_FREE_PAGES);
 
-	if (global_page_state(NR_SHMEM) + total_swapcache_pages() <
+	if (global_page_state(NR_SHMEM) + global_page_state(NR_MLOCK) + total_swapcache_pages() <
 		global_page_state(NR_FILE_PAGES) + zcache_pages())
 		other_file = global_page_state(NR_FILE_PAGES) + zcache_pages() -
 						global_page_state(NR_SHMEM) -
+						global_page_state(NR_MLOCK) -
 						global_page_state(NR_UNEVICTABLE) -
 						total_swapcache_pages();
 	else
@@ -504,6 +509,30 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			    tasksize <= selected_tasksize)
 				continue;
 		}
+
+#ifdef CONFIG_LMK_ZYGOTE_PROTECT
+		//zygote protection
+		if (!strncmp("main",p->comm,4) && p->parent->pid == 1 ) {
+			if (oom_score_adj != OOM_SCORE_ADJ_MIN) {
+				lowmem_print(2, "select but ignore '%s' (%d), oom_score_adj %d, oom_adj %d, size %d, to kill with invalid adj values\n" \
+								"cache %ldkB is below limit %ldkB",
+					p->comm, p->pid, oom_score_adj, REVERT_ADJ(oom_score_adj), tasksize,
+					other_file * (long)(PAGE_SIZE / 1024),
+					minfree * (long)(PAGE_SIZE / 1024));
+
+				//reset oom_score_adj to OOM_SCORE_ADJ_MIN
+				task_lock(p);
+				p->signal->oom_score_adj = OOM_SCORE_ADJ_MIN;
+				task_unlock(p);
+
+				lowmem_print(2, "reset the '%s' (%d) adj values: oom_score_adj %d, oom_adj %d\n",
+						p->comm, p->pid, OOM_SCORE_ADJ_MIN, REVERT_ADJ(OOM_SCORE_ADJ_MIN));
+
+				continue;
+			}
+		}
+#endif
+
 		selected = p;
 		selected_tasksize = tasksize;
 		selected_oom_score_adj = oom_score_adj;

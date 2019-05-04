@@ -19,7 +19,14 @@ CFLAGS_trace.o := -I$(src)
 
 ccflags-y += -D__CHECK_ENDIAN__
 
+# HTC_WIFI_START
+ifneq ($(findstring SoftBank JP, $(PRIVATE_RCMS_SKU)),)
+$(obj)/regdb.c: $(src)/db_sb.txt $(src)/genregdb.awk
+	@$(AWK) -f $(srctree)/$(src)/genregdb.awk < $< > $@
+else
 $(obj)/regdb.c: $(src)/db.txt $(src)/genregdb.awk
 	@$(AWK) -f $(srctree)/$(src)/genregdb.awk < $< > $@
+endif
+# HTC_WIFI_END
 
 clean-files := regdb.c

@@ -80,4 +80,6 @@ obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
 obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
 obj-$(CONFIG_INPUT_IDEAPAD_SLIDEBAR)	+= ideapad_slidebar.o
 obj-$(CONFIG_INPUT_PIXART_OTS_PAT9125_SWITCH)	+= ots_pat9125/
+obj-$(CONFIG_AK8789_HALLSENSOR)		+= hall_sensor.o hall_sensor_notify.o
+obj-$(CONFIG_INPUT_DUMMY_KEYPAD)	+= dummy_keypad.o
 obj-$(CONFIG_INPUT_STMVL53L0)                 += vl53L0/

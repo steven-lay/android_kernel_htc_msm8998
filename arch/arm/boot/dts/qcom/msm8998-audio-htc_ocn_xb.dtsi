@@ -1,0 +1,135 @@
+/* 8996 Ocean Audio Config */
+
+&pmi8998_gpios {
+	gpio@ca00 { /* AUD_HPMIC_AGND_FLIP_EN_S0 */
+		reg = <0xca00 0x100>;
+		qcom,pin-num = <11>;
+		qcom,mode = <1>;		/* Digital output */
+		qcom,pull = <5>;		/* No Pull */
+		qcom,src-sel = <0>;		/* GPIO */
+		qcom,master-en = <1>;		/* Enable GPIO */
+		qcom,vin-sel = <1>;
+		qcom,invert = <0>;
+		status = "okay";
+	};
+
+	gpio@cb00 { /* AUD_HPMIC_AGND_FLIP_EN_S1 */
+		reg = <0xcb00 0x100>;
+		qcom,pin-num = <12>;
+		qcom,mode = <1>;		/* Digital output */
+		qcom,pull = <5>;		/* No Pull */
+		qcom,src-sel = <0>;		/* GPIO */
+		qcom,master-en = <1>;		/* Enable GPIO */
+		qcom,vin-sel = <0>;
+		qcom,invert = <1>;		/* Output High */
+		status = "okay";
+	};
+};
+
+&pm8005_gpios {
+	gpio@c000 { /* AUD_3V3_EN */
+		reg = <0xc000 0x100>;
+		qcom,pin-num = <1>;
+		qcom,mode = <1>;		/* Digital output */
+		qcom,pull = <4>;		/* Pull Down */
+		qcom,src-sel = <0>;		/* GPIO */
+		qcom,master-en = <1>;		/* Enable GPIO */
+		qcom,vin-sel = <1>;
+		qcom,invert = <1>;
+		status = "okay";
+	};
+};
+
+&soc {
+	tlmm: pinctrl@03400000 {
+		/*type-C headset ID1, ID2, Flip position*/
+		headset_pin {
+			headset_pin_default: headset_pin_default {
+				mux {
+					pins = "gpio24", "gpio26", "gpio91";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio24", "gpio26", "gpio91";
+					drive-strength = <2>; /* 2 mA */
+					bias-disable;       /* NO PULL */
+				};
+			};
+
+		};
+	};
+
+	sound-tavil {
+		qcom,audio-routing =
+			"RX_BIAS", "MCLK",
+			"MADINPUT", "MCLK",
+			"AMIC2", "MIC BIAS2",
+			"MIC BIAS2", "Headset Mic",
+/* HTC_AUD_START */
+			"AMIC3", "ANCLeft Headset Mic",
+			"ANCLeft Headset Mic", "MCLK",
+			"AMIC4", "ANCRight Headset Mic",
+			"ANCRight Headset Mic", "MCLK",
+			"DMIC0", "MIC BIAS1",
+			"MIC BIAS1", "Digital Mic",
+			"DMIC1", "MIC BIAS1",
+			"MIC BIAS1", "Digital Mic",
+			"DMIC2", "MIC BIAS3",
+			"MIC BIAS3", "Digital Mic",
+			"DMIC3", "MIC BIAS3",
+			"MIC BIAS3", "Digital Mic",
+			"DMIC4", "MIC BIAS4",
+			"MIC BIAS4", "Digital Mic",
+			"DMIC5", "MIC BIAS4",
+			"MIC BIAS4", "Digital Mic";
+/* HTC_AUD_END */
+
+		qcom,wsa-max-devs = <0>; /* No wsa device */
+		/delete-property/ qcom,wsa-devs;
+		/delete-property/ qcom,usbc-analog-en1_gpio;
+		/delete-property/ qcom,usbc-analog-en2_n_gpio;
+		/delete-property/ qcom,us-euro-gpios;
+		/delete-property/ qcom,hph-en0-gpio;
+		/delete-property/ qcom,hph-en1-gpio;
+
+		qcom,msm-mbhc-hphl-swh = <1>; /* 1 for NO, 0 for NC */
+		qcom,msm-mbhc-gnd-swh = <1>; /* 1 for NO, 0 for NC */
+
+		mbhc-swap-detect = <0>; /* Disable MBHC SWAP detection */
+
+		htc,aud_gpio_ids = "htc,aud_typec_id1",
+				"htc,aud_typec_id2",
+				"htc,aud_usb_position";
+
+		htc,aud_gpio_switches = "htc,hpmic_agnd_flip_en_s0",
+				"htc,hpmic_agnd_flip_en_s1",
+				"htc,miclr_flip_en",
+				"htc,miclr_dgnd_sw_en";
+
+		htc,aud_3v3_en = <&pm8005_gpios 1 0>;
+		htc,aud_usb_position = <&tlmm 91 0>;
+		htc,aud_typec_id1 = <&tlmm 24 0>;
+		htc,aud_typec_id2 = <&tlmm 26 0>;
+		htc,hpmic_agnd_flip_en_s0= <&pmi8998_gpios 11 0>;
+		htc,hpmic_agnd_flip_en_s1= <&pmi8998_gpios 12 0>;
+		htc,miclr_flip_en = <&tlmm 29 0>;
+		htc,miclr_dgnd_sw_en = <&pm8998_gpios 20 0>;
+		htc,hsmic_2v85_en = <&pm8998_gpios 15 0>;
+		htc,aud_remote_sensor = <&pm8998_gpios 9 0>;
+
+		htc,adapter_35mm_threshold = <330 800>;
+		htc,adapter_25mm_threshold = <1250 2850>;
+
+		htc,headset_adc_channel = <19>;
+		qcom,headset-vadc = <&pm8998_vadc>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&headset_pin_default>;
+
+/*		htc,mbhc_hsdet_l = <&tlmm 27 0>; */
+		htc,usb_hph_fsa3030_sel0 = <&tlmm 9 0>;
+		htc,usb_hph_fsa3030_sel1 = <&tlmm 31 0>;
+		htc,usb_hph_fsa3030_sel2 = <&pmi8998_gpios 2 0>;
+	};
+};
+

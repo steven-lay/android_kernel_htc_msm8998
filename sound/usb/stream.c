@@ -728,6 +728,10 @@ int snd_usb_parse_audio_interface(struct snd_usb_audio *chip, int iface_no)
 populate_fp:
 		fp = kzalloc(sizeof(*fp), GFP_KERNEL);
 		if (! fp) {
+/* HTC_AUD_START - Klocwork */
+			if (protocol == UAC_VERSION_3)
+				kfree(fmt);
+/* HTC_AUD_END */
 			dev_err(&dev->dev, "cannot malloc\n");
 			return -ENOMEM;
 		}
@@ -784,6 +788,10 @@ populate_fp:
 			kfree(fp->rate_table);
 			kfree(fp);
 			fp = NULL;
+/* HTC_AUD_START - Klocwork */
+			if (protocol == UAC_VERSION_3)
+				kfree(fmt);
+/* HTC_AUD_END */
 			continue;
 		}
 

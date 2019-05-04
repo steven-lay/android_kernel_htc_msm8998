@@ -279,6 +279,11 @@ static int ehci_platform_probe(struct platform_device *dev)
 	}
 
 	res_mem = platform_get_resource(dev, IORESOURCE_MEM, 0);
+	if (IS_ERR(res_mem)) {
+		err = PTR_ERR(res_mem);
+		goto err_power;
+	}
+
 	hcd->regs = devm_ioremap_resource(&dev->dev, res_mem);
 	if (IS_ERR(hcd->regs)) {
 		err = PTR_ERR(hcd->regs);

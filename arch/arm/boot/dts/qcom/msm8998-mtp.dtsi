@@ -10,8 +10,10 @@
  * GNU General Public License for more details.
  */
 
+#include "msm8998-mdss-panels.dtsi"
 #include <dt-bindings/interrupt-controller/irq.h>
-#include "msm8998-camera-sensor-mtp.dtsi"
+#include "msm8998-pinctrl.dtsi"
+//#include "msm8998-camera-sensor-mtp.dtsi"
 &vendor {
 	bluetooth: bt_wcn3990 {
 		compatible = "qca,wcn3990";
@@ -88,6 +90,7 @@
 	qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "DDR50", "SDR104";
 
 	cd-gpios = <&tlmm 95 0x1>;
+	htc,slot-type = <1>;
 
 	status = "ok";
 };
@@ -102,14 +105,14 @@
 	/* GPIO 2 for Home Key */
 	gpio@c100 {
 		status = "okay";
-		qcom,mode = <0>;
-		qcom,pull = <0>;
+		qcom,mode = <1>;
+		qcom,pull = <4>;
 		qcom,vin-sel = <0>;
 		qcom,src-sel = <0>;
 		qcom,out-strength = <1>;
 	};
 
-	/* GPIO 6 for Vol+ Key */
+/*	GPIO 6 for Vol+ Key
 	gpio@c500 {
 		status = "okay";
 		qcom,mode = <0>;
@@ -118,7 +121,7 @@
 		qcom,src-sel = <0>;
 		qcom,out-strength = <1>;
 	};
-
+*/
 	/* GPIO 7 for Snapshot Key */
 	gpio@c600 {
 		status = "okay";
@@ -427,7 +430,7 @@
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
 	qcom,mdss-dsi-bl-min-level = <1>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
-	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_no_labibb>;
 };
 
 &dsi_dual_sim_cmd {
@@ -497,6 +500,17 @@
 		qcom,fast-avg-setup = <0>;
 	};
 
+        chan@4e {
+                label = "emmc_therm";
+                reg = <0x4e>;
+                qcom,decimation = <2>;
+                qcom,pre-div-channel-scaling = <0>;
+                qcom,calibration-type = "ratiometric";
+                qcom,scale-function = <2>;
+                qcom,hw-settle-time = <2>;
+                qcom,fast-avg-setup = <0>;
+        };
+
 	chan@51 {
 		label = "quiet_therm";
 		reg = <0x51>;
@@ -552,6 +566,17 @@
 		qcom,btm-channel-number = <0x78>;
 		qcom,thermal-node;
 	};
+
+		chan@4e {
+                label = "emmc_therm";
+                reg = <0x4e>;
+                qcom,pre-div-channel-scaling = <0>;
+                qcom,calibration-type = "ratiometric";
+                qcom,scale-function = <2>;
+                qcom,hw-settle-time = <2>;
+                qcom,btm-channel-number = <0x80>;
+                qcom,thermal-node;
+        };
 };
 
 &wil6210 {

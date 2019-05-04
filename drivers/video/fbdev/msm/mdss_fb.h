@@ -374,6 +374,10 @@ struct msm_fb_data_type {
 	bool pending_switch;
 	struct mutex switch_lock;
 	struct input_handler *input_handler;
+
+	/* HTC: store last brightness value for backlight ctrl 1 calibration */
+	u32 last_bri1;
+	bool dimming_on;
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
@@ -484,4 +488,5 @@ void mdss_panelinfo_to_fb_var(struct mdss_panel_info *pinfo,
 						struct fb_var_screeninfo *var);
 void mdss_fb_calc_fps(struct msm_fb_data_type *mfd);
 void mdss_fb_idle_pc(struct msm_fb_data_type *mfd);
+int mdss_backlight_trans(int val, struct mdss_panel_info *panel_info, bool brightness_to_bl);
 #endif /* MDSS_FB_H */

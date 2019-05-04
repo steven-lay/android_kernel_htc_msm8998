@@ -16,13 +16,25 @@
 #include <linux/stringify.h>
 #include <linux/power_supply.h>
 #include "wcdcal-hwdep.h"
+/* HTC_AUD_START - AS HS */
+/* report unsupport if it's non HTC analog adapter */
+#include <linux/switch.h>
+#include <sound/htc_acoustic_alsa.h>
+/* HTC_AUD_END */
 
 #define TOMBAK_MBHC_NC	0
 #define TOMBAK_MBHC_NO	1
 #define WCD_MBHC_DEF_BUTTONS 8
 #define WCD_MBHC_KEYCODE_NUM 8
 #define WCD_MBHC_USLEEP_RANGE_MARGIN_US 100
+/* HTC_AUD_START - AS HS */
+#if 0
 #define WCD_MBHC_THR_HS_MICB_MV  2700
+#else
+#define WCD_MBHC_THR_HS_MICB_MV  1800
+#endif
+/* HTC_AUD_END */
+
 /* z value defined in Ohms */
 #define WCD_MONO_HS_MIN_THR	2
 #define WCD_MBHC_STRINGIFY(s)  __stringify(s)
@@ -82,6 +94,11 @@ enum wcd_mbhc_plug_type {
 	MBHC_PLUG_TYPE_HIGH_HPH,
 	MBHC_PLUG_TYPE_GND_MIC_SWAP,
 	MBHC_PLUG_TYPE_ANC_HEADPHONE,
+/* HTC_AUD_START - AS HS */
+	MBHC_PLUG_TYPE_AS_HEADSET,
+	MBHC_PLUG_TYPE_35MM_HEADSET,
+	MBHC_PLUG_TYPE_25MM_HEADSET,
+/* HTC_AUD_END */
 };
 
 enum pa_dac_ack_flags {
@@ -146,6 +163,7 @@ enum wcd_mbhc_event_state {
 	WCD_MBHC_EVENT_PA_HPHL,
 	WCD_MBHC_EVENT_PA_HPHR,
 };
+
 struct wcd_mbhc_general_cfg {
 	u8 t_ldoh;
 	u8 t_bg_fast_settle;
@@ -425,6 +443,7 @@ struct wcd_mbhc {
 	bool is_extn_cable;
 	bool skip_imped_detection;
 	bool is_btn_already_regd;
+	bool swap_detect; /* HTC_AUD - disable swap detection */
 
 	struct snd_soc_codec *codec;
 	/* Work to perform MBHC Firmware Read */
@@ -464,7 +483,6 @@ struct wcd_mbhc {
 
 	unsigned long intr_status;
 	bool is_hph_ocp_pending;
-
 	bool usbc_force_pr_mode;
 	int usbc_mode;
 	struct notifier_block psy_nb;

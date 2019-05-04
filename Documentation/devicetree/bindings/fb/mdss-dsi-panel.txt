@@ -189,6 +189,7 @@ Optional properties:
 					"bl_ctrl_pwm" = Backlight controlled by PWM gpio.
 					"bl_ctrl_wled" = Backlight controlled by WLED.
 					"bl_ctrl_dcs" = Backlight controlled by DCS commands.
+					"bl_ctrl_backlight" = Backlight controlled by backlight device.
 					other: Unknown backlight control. (default)
 - qcom,mdss-dsi-bl-dcs-command-state:	A string that specifies the ctrl state for sending brightness
 					controlling commands, this is only available when backlight is controlled by DCS commands.
@@ -578,6 +579,24 @@ Optional properites:
 					Each child represents timings settings for a specific resolution.
 - qcom,mdss-dsi-post-init-delay:        Specifies required number of frames to wait so that panel can be functional
 					to show proper display.
+
+- htc,burst-on-level           An integer value indicates the burst mode on level.
+- htc,burst-off-level          An integer value indicated the burst mode off level.
+- htc,burst-bl-value           An integer value indicated the burst bl value.
+- htc,mdss-dsi-bl-backlight             Specifies primary backlight device node when "bl_ctrl_backlight" was used.
+- htc,color-temp-cmds:		A node lists the color temperature setting that base on
+					qcom dsi controller protocol.
+- htc,color-default-cmds:      A byte stream formed by multiple dcs packets base on
+                                      qcom dsi controller protocol.
+- htc,color-srgb-cmds:         A byte stream formed by multiple dcs packets base on
+                                      qcom dsi controller protocol.
+- htc,rst-keep-high: A boolean property to indicate, whether device need lcm reset gpio(non cpu-gpio) keep high while suspend.
+- htc,esd-status-check-mode: Specifies HTC panel status check method for ESD recovery.
+					"tp_reg_check" = TP driver monitor IC status to check if need to recover panel.
+- htc,hal_color_feature_enabled: A boolean property to decide if need to use hal color feature
+for htc color calibration.
+htc,ddic_color_mode: A boolean property to decide if need to set color mode via DDIC.
+
 
 Additional properties added to the second level nodes that represent timings properties:
 - qcom,mdss-dsi-timing-default:		Property that specifies the current child as the default

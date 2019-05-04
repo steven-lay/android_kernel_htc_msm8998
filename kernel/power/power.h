@@ -77,6 +77,16 @@ static struct kobj_attribute _name##_attr = {	\
 	.store	= _name##_store,		\
 }
 
+#define power_attr_wo(_name)			\
+static struct kobj_attribute _name##_attr = {	\
+	.attr	= {				\
+		.name = __stringify(_name),	\
+		.mode = S_IWUGO,			\
+	},					\
+	.show	= NULL,				\
+	.store	= _name##_store,		\
+}
+
 #define power_attr_ro(_name) \
 static struct kobj_attribute _name##_attr = {	\
 	.attr	= {				\
@@ -84,6 +94,7 @@ static struct kobj_attribute _name##_attr = {	\
 		.mode = S_IRUGO,		\
 	},					\
 	.show	= _name##_show,			\
+	.store	= NULL,				\
 }
 
 /* Preferred image size in bytes (default 500 MB) */
@@ -229,10 +240,17 @@ enum {
 
 extern int pm_test_level;
 
+extern void suspend_sys_sync_queue(void);
+extern int suspend_sys_sync_wait(void);
+
 #ifdef CONFIG_SUSPEND_FREEZER
 static inline int suspend_freeze_processes(void)
 {
 	int error;
+
+	error = suspend_sys_sync_wait();
+	if (error)
+		return error;
 
 	error = freeze_processes();
 	/*

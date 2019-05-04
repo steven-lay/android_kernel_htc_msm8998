@@ -35,6 +35,8 @@
 
 #define DM_VERITY_OPTS_MAX		(2 + DM_VERITY_OPTS_FEC)
 
+extern atomic_t em_remount;
+
 static unsigned dm_verity_prefetch_cluster = DM_VERITY_DEFAULT_PREFETCH_SIZE;
 
 module_param_named(prefetch_cluster, dm_verity_prefetch_cluster, uint, S_IRUGO | S_IWUSR);
@@ -198,6 +200,9 @@ static int verity_handle_err(struct dm_verity *v, enum verity_block_type type,
 	char *envp[] = { verity_env, NULL };
 	const char *type_str = "";
 	struct mapped_device *md = dm_table_get_md(v->ti->table);
+
+	if (atomic_read(&em_remount))
+		return 0;
 
 	/* Corruption should be visible in device status in all modes */
 	v->hash_failed = 1;
@@ -485,7 +490,7 @@ static void verity_end_io(struct bio *bio)
 {
 	struct dm_verity_io *io = bio->bi_private;
 
-	if (bio->bi_error && !verity_fec_is_enabled(io->v)) {
+	if ((bio->bi_error && !verity_fec_is_enabled(io->v)) || atomic_read(&em_remount)) {
 		verity_finish_io(io, bio->bi_error);
 		return;
 	}

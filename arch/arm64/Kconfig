@@ -17,6 +17,8 @@ config ARM64
 	select ARCH_HAS_UBSAN_SANITIZE_ALL
 	select ARM_AMBA
 	select ARM_ARCH_TIMER
+	select HAVE_KERNEL_GZIP
+	select HAVE_KERNEL_LZ4
 	select ARM_GIC
 	select AUDIT_ARCH_COMPAT_GENERIC
 	select ARM_GIC_V2M if PCI_MSI
@@ -645,6 +647,19 @@ config SCHED_SMT
 	  MultiThreading at a cost of slightly increased overhead in some
 	  places. If unsure say N here.
 
+config HTC_POWER_DEBUG
+        bool "Support htc power debug feature"
+        help
+         Use this to enable htc power debug feature including pm statistics,
+         clock/gpio/qpnp pin dump, wakeup source, kerenl top and autosuspend
+         stage footprint
+
+config HTC_TSENS_CONTROLLER_1
+	bool "Support htc tsens controller num"
+	help
+	  Use this config to set TSEN CONTROLLER Number for common O80 branch.
+	  MSM8998 has 2 CONTROLLERs but sdm630 has 1.
+
 config NR_CPUS
 	int "Maximum number of CPUs (2-4096)"
 	range 2 4096
@@ -1095,6 +1110,8 @@ choice
 	  Image.gz to be used for final image creation.
 	  The image will built in arch/arm64/boot/IMAGE-NAME-dtb
 
+	config IMG_LZ4_DTB
+		bool "Image.lz4-dtb"
 	config IMG_GZ_DTB
 		bool "Image.gz-dtb"
 	config IMG_DTB
@@ -1104,6 +1121,7 @@ endchoice
 config BUILD_ARM64_APPENDED_KERNEL_IMAGE_NAME
 	string
 	depends on BUILD_ARM64_APPENDED_DTB_IMAGE
+	default "Image.lz4-dtb" if IMG_LZ4_DTB
 	default "Image.gz-dtb" if IMG_GZ_DTB
 	default "Image-dtb" if IMG_DTB
 
@@ -1197,3 +1215,5 @@ source "arch/arm64/crypto/Kconfig"
 endif
 
 source "lib/Kconfig"
+
+source "arch/arm64/Kconfig.htc"

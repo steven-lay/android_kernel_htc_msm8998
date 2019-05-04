@@ -105,9 +105,11 @@ static int __init pfk_init(void)
 
 	int ret = 0;
 
+#if 0 /* FIXME: skip pfk_ecryptfs feature */
 	ret = pfk_ecryptfs_init();
 	if (ret != 0)
 		goto fail;
+#endif
 
 	ret = pfk_ext4_init();
 	if (ret != 0) {

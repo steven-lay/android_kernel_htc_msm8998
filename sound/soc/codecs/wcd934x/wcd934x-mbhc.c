@@ -33,7 +33,13 @@
 #include "wcd934x-mbhc.h"
 #include "../wcdcal-hwdep.h"
 
+/* HTC_AUD_START - disable impedance sense */
+#if 0
 #define TAVIL_ZDET_SUPPORTED          true
+#else
+#define TAVIL_ZDET_SUPPORTED          false
+#endif
+/* HTC_AUD_END */
 /* Z value defined in milliohm */
 #define TAVIL_ZDET_VAL_32             32000
 #define TAVIL_ZDET_VAL_400            400000

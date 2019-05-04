@@ -66,3 +66,10 @@ usb_f_rmnet_bam-y		:= f_rmnet.o u_ctrl_qti.o
 obj-$(CONFIG_USB_F_RMNET_BAM)   += usb_f_rmnet_bam.o
 usb_f_ccid-y			:= f_ccid.o
 obj-$(CONFIG_USB_F_CCID)   	+= usb_f_ccid.o
+# HTC
+usb_f_mirrorlink-y		:= f_mirrorlink.o
+obj-$(CONFIG_USB_F_MIRRORLINK)	+= usb_f_mirrorlink.o
+usb_f_autobot-y			:= f_autobot.o
+obj-$(CONFIG_USB_F_AUTOBOT)	+= usb_f_autobot.o
+usb_f_charger-y			:= f_charger.o
+obj-$(CONFIG_USB_F_CHARGER)	+= usb_f_charger.o

@@ -1757,6 +1757,7 @@ int ipa3_tx_dp(enum ipa_client_type dst, struct sk_buff *skb,
 			dst_ep_idx = -1;
 	}
 
+	BUG_ON(dst_ep_idx == 1);
 	sys = ipa3_ctx->ep[src_ep_idx].sys;
 
 	if (!sys->ep->valid) {

@@ -1462,7 +1462,7 @@
 	};
 
 	pcie0: qcom,pcie@01c00000 {
-		compatible = "qcom,pci-msm";
+		compatible = "qcom,pci-msmXXX";
 		cell-index = <0>;
 
 		reg = <0x1c00000 0x2000>,
@@ -2739,6 +2739,12 @@
 			reg = <0x65c 4>;
 		};
 
+                restart_info@a94 {
+                        compatible = "htc,msm-imem-restart_info";
+                        reg = <0xa94 100>;
+                        info_size = <100>;
+                };
+
 		boot_stats@6b0 {
 			compatible = "qcom,msm-imem-boot_stats";
 			reg = <0x6b0 32>;
@@ -2828,6 +2834,14 @@
 			qcom,dump-id = <0x87>;
 		};
 	};
+
+	htc_pnpmgr{
+		compatible = "htc,perf_table";
+		htc,cluster-map = <0x0F>, <0xF0>;
+		htc,perf_table = <960000>, <960000>, <960000>, <960000>, <960000>,
+			<960000>, <960000>, <960000>, <960000>, <960000>;
+	};
+
 
 	qcom,msm-ssc-sensors {
 		compatible = "qcom,msm-ssc-sensors";

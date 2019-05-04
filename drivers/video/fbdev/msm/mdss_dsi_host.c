@@ -60,7 +60,7 @@ struct mdss_hw mdss_dsi1_hw = {
 };
 
 
-#define DSI_EVENT_Q_MAX	4
+#define DSI_EVENT_Q_MAX	16
 
 #define DSI_BTA_EVENT_TIMEOUT (HZ / 10)
 
@@ -2553,6 +2553,7 @@ static int mdss_dsi_mdp_busy_tout_check(struct mdss_dsi_ctrl_pdata *ctrl)
 	bool stop_hs_clk = false;
 	int tout = 1;
 
+	MDSS_XLOG(ctrl->ndx, ctrl->mdp_busy, current->pid, 0xbadf);
 	/*
 	 * two possible scenario:
 	 * 1) DSI_INTR_CMD_MDP_DONE set but isr not fired
@@ -2617,8 +2618,24 @@ void mdss_dsi_cmd_mdp_busy(struct mdss_dsi_ctrl_pdata *ctrl)
 		if (!ctrl->mdp_busy)
 			rc = 1;
 		spin_unlock_irqrestore(&ctrl->mdp_lock, flags);
-		if (!rc && mdss_dsi_mdp_busy_tout_check(ctrl))
-			pr_err("%s: timeout error\n", __func__);
+		if (!rc) {
+			if (mdss_dsi_mdp_busy_tout_check(ctrl)) {
+				u32 status;
+				struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+
+				status = readl_relaxed(mdata->mdp_base + MDSS_REG_HW_INTR2_STATUS);
+				pr_err("%s: timeout error, TE ISR status=0x%x\n", __func__, status);
+				if (status & 0x1100000) {
+					MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0_ctrl",
+						"dsi0_phy", "dsi1_ctrl", "dsi1_phy",
+						"vbif", "vbif_nrt", "dbg_bus",
+						"vbif_dbg_bus", "panic");
+				} else {
+					MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0_ctrl",
+						"dsi0_phy", "dsi1_ctrl", "dsi1_phy");
+				}
+			}
+		}
 	}
 	pr_debug("%s: done pid=%d\n", __func__, current->pid);
 	MDSS_XLOG(ctrl->ndx, ctrl->mdp_busy, current->pid, XLOG_FUNC_EXIT);

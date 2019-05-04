@@ -51,6 +51,7 @@
 #include <asm/ptrace.h>
 #include <asm/irq_regs.h>
 
+atomic_t em_remount = ATOMIC_INIT(0);
 /* Whether we react on sysrq keys or just ignore them */
 static int __read_mostly sysrq_enabled = CONFIG_MAGIC_SYSRQ_DEFAULT_ENABLE;
 static bool __read_mostly sysrq_always_enabled;
@@ -188,6 +189,7 @@ static struct sysrq_key_op sysrq_show_timers_op = {
 
 static void sysrq_handle_mountro(int key)
 {
+	atomic_set(&em_remount, 1);
 	emergency_remount();
 }
 static struct sysrq_key_op sysrq_mountro_op = {

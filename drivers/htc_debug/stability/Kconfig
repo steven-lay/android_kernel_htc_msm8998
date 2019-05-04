@@ -1,0 +1,28 @@
+config HTC_DEBUG_RESTART_TIMER
+	bool "add a timer in restart notifier chain"
+	default y
+	depends on HTC_DEBUG
+
+config HTC_REBOOT_BLOCK
+	bool "Store reboot reason / msg ...etc. in IMEM or storage"
+	default n
+	help
+	  Say Y here if you want the HTC Reboot Block feature
+
+config HTC_HELPER_FUNCTIONS
+	bool "HTC helper functions"
+	depends on HTC_DEBUG
+	default n
+	help
+	  Extract debug flag from kernel cmdline and define read-only
+	  functions to global kernel space
+
+config HTC_DEBUG_PAGE_ENTRIES_NR
+	int
+	default 4
+
+config HTC_NC_GPIO_PIN_SETTING
+	bool "HTC style nc pin setting features"
+	default n
+	help
+	  Say Y here if you want the HTC style nc pin setting features

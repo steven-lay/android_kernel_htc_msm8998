@@ -564,7 +564,8 @@ static int dwc3_gadget_set_ep_config(struct dwc3 *dwc, struct dwc3_ep *dep,
 		dep->stream_capable = true;
 	}
 
-	if (usb_endpoint_xfer_isoc(desc))
+	if (usb_endpoint_xfer_isoc(desc)
+	    || (dep->endpoint.is_ncm && !usb_endpoint_xfer_control(desc)))
 		params.param1 |= DWC3_DEPCFG_XFER_IN_PROGRESS_EN;
 
 	/*
@@ -649,6 +650,9 @@ static int __dwc3_gadget_ep_enable(struct dwc3_ep *dep,
 		reg = dwc3_readl(dwc->regs, DWC3_DALEPENA);
 		reg |= DWC3_DALEPENA_EP(dep->number);
 		dwc3_writel(dwc->regs, DWC3_DALEPENA, reg);
+
+		if (dep->endpoint.is_ncm)
+			dwc3_gadget_resize_tx_fifos(dwc);
 
 		if (!usb_endpoint_xfer_isoc(desc))
 			return 0;
@@ -937,12 +941,21 @@ static void dwc3_prepare_one_trb(struct dwc3_ep *dep,
 	if (chain)
 		trb->ctrl |= DWC3_TRB_CTRL_CHN;
 
+	if (dep->endpoint.is_ncm)
+		trb->ctrl |= DWC3_TRB_CTRL_CSP;
+
 	if (usb_endpoint_xfer_bulk(dep->endpoint.desc) && dep->stream_capable)
 		trb->ctrl |= DWC3_TRB_CTRL_SID_SOFN(req->request.stream_id);
 
 	trb->ctrl |= DWC3_TRB_CTRL_HWO;
 
 	trace_dwc3_prepare_trb(dep, trb);
+	if (!usb_endpoint_xfer_isoc(dep->endpoint.desc)) {
+		if (last)
+			trb->ctrl |= DWC3_TRB_CTRL_LST;
+		else if (dep->endpoint.is_ncm && !req->request.no_interrupt && dep->direction != 1)
+			trb->ctrl |= DWC3_TRB_CTRL_IOC;
+	}
 }
 
 /*
@@ -2605,7 +2618,8 @@ static void dwc3_endpoint_interrupt(struct dwc3 *dwc,
 		if (!usb_endpoint_xfer_isoc(dep->endpoint.desc)) {
 			dev_dbg(dwc->dev, "%s is not an Isochronous endpoint\n",
 					dep->name);
-			return;
+			if (!dep->endpoint.is_ncm)
+				return;
 		}
 
 		dwc3_endpoint_transfer_complete(dwc, dep, event);
@@ -3278,6 +3292,8 @@ static void dwc3_gadget_interrupt(struct dwc3 *dwc,
 	case DWC3_DEVICE_EVENT_RESET:
 		dwc3_gadget_reset_interrupt(dwc);
 		dwc->dbg_gadget_events.reset++;
+		if (dwc->usb_disable)
+			dwc->notify_usb_disabled();
 		break;
 	case DWC3_DEVICE_EVENT_CONNECT_DONE:
 		dwc3_gadget_conndone_interrupt(dwc);

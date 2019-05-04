@@ -45,6 +45,11 @@
 #include <sound/compress_driver.h>
 #include <sound/msm-audio-effects-q6-v2.h>
 #include "msm-pcm-routing-v2.h"
+/* HTC_AUD_START */
+#include <sound/htc_acoustic_alsa.h>
+#include <linux/sched.h>
+#include <linux/freezer.h>
+/* HTC_AUD_END */
 #include "msm-qti-pp-config.h"
 
 #define DSP_PP_BUFFERING_IN_MSEC	25
@@ -79,6 +84,9 @@ const DECLARE_TLV_DB_LINEAR(msm_compr_vol_gain, 0,
 #define STREAM_ARRAY_INDEX(stream_id) (stream_id - 1)
 
 #define MAX_NUMBER_OF_STREAMS 2
+/* HTC_AUD_START */
+struct wake_lock compr_lpa_q6_cb_wakelock;
+/* HTC_AUD_END */
 
 struct msm_compr_gapless_state {
 	bool set_next_stream_id;
@@ -138,7 +146,12 @@ struct msm_compr_audio {
 	int32_t partial_drain_delay;
 
 	uint16_t session_id;
-
+/* HTC_AUD_START */
+	uint16_t bits_per_sample;
+	atomic_t drain_done_pendding;
+	uint64_t lasttimestamp;
+	int32_t stream_end;
+/* HTC_AUD_END */
 	uint32_t sample_rate;
 	uint32_t num_channels;
 
@@ -215,6 +228,47 @@ struct msm_compr_ch_map {
 	bool set_ch_map;
 	char channel_map[PCM_FORMAT_MAX_NUM_CHANNEL];
 };
+
+/* HTC_AUD_START */
+static int msm_compr_wait_event_freezable(struct msm_compr_audio *prtd, bool eos)
+{
+	DEFINE_WAIT(wait_queue);
+	int wait_times = 0;
+	if (eos) {
+		for (;;) {
+			prepare_to_wait(&prtd->eos_wait, &wait_queue, TASK_INTERRUPTIBLE);
+			if (prtd->eos_ack || prtd->cmd_interrupt || atomic_read(&prtd->error))
+				break;
+			if (signal_pending(current)) {
+				pr_debug("Get sw interrupt and get signal\n");
+				break;
+			}
+			pr_debug("wake_unlock compr_lpa_q6_cb_wakelock due to eos_wait\n");
+			wake_unlock(&compr_lpa_q6_cb_wakelock);
+			freezable_schedule();
+			wait_times++;
+		}
+		finish_wait(&prtd->eos_wait, &wait_queue);
+	} else {
+		for (;;) {
+			prepare_to_wait(&prtd->drain_wait, &wait_queue, TASK_INTERRUPTIBLE);
+			if (prtd->drain_ready || prtd->cmd_interrupt || atomic_read(&prtd->xrun) || atomic_read(&prtd->error))
+				break;
+			if (signal_pending(current)) {
+				pr_debug("Get sw interrupt and get signal\n");
+				break;
+			}
+			pr_debug("wake_unlock compr_lpa_q6_cb_wakelock due to drain_wait\n");
+			wake_unlock(&compr_lpa_q6_cb_wakelock);
+			freezable_schedule();
+			wait_times++;
+		}
+		finish_wait(&prtd->drain_wait, &wait_queue);
+	}
+	pr_debug("%s: %s done, wait_times %d\n", __func__, eos ? "wait_eos" : "wait_drain", wait_times);
+	return 0;
+}
+/* HTC_AUD_END */
 
 static int msm_compr_send_dec_params(struct snd_compr_stream *cstream,
 				     struct msm_compr_dec_params *dec_params,
@@ -593,6 +647,10 @@ static void compr_event_handler(uint32_t opcode,
 	pr_debug("%s opcode =%08x\n", __func__, opcode);
 	switch (opcode) {
 	case ASM_DATA_EVENT_WRITE_DONE_V2:
+/* HTC_AUD_START */
+		wake_lock_timeout(&compr_lpa_q6_cb_wakelock, 5 * HZ);
+		pr_debug("ASM_DATA_EVENT_WRITE_DONE_V2 hold compr_lpa_q6_cb_wakelock 5s\n");
+/* HTC_AUD_END */
 		spin_lock_irqsave(&prtd->lock, flags);
 
 		if (payload[3]) {
@@ -646,6 +704,12 @@ static void compr_event_handler(uint32_t opcode,
 			/* Writes must be restarted from _copy() */
 			pr_debug("write_done received while not started, treat as xrun");
 			atomic_set(&prtd->xrun, 1);
+/* HTC_AUD_START */
+			if (atomic_read(&prtd->drain)) {
+				pr_debug("write_done received while not started and wait drain buffer. Set drain_done_pending as 1\n");
+				atomic_set(&prtd->drain_done_pendding, 1);
+			}
+/* HTC_AUD_END */
 			spin_unlock_irqrestore(&prtd->lock, flags);
 			break;
 		}
@@ -667,9 +731,26 @@ static void compr_event_handler(uint32_t opcode,
 			   && atomic_read(&prtd->drain)) {
 			prtd->last_buffer = 1;
 			msm_compr_send_buffer(prtd);
+/* HTC_AUD_START */
+			/* we should do this after 8952 deep sleep playback workaround */
+			pr_debug("wake_unlock compr_lpa_q6_cb_wakelock due to last_buffer\n");
+			wake_unlock(&compr_lpa_q6_cb_wakelock);
+/* HTC_AUD_END */
 			prtd->last_buffer = 0;
+/* HTC_AUD_START - Must release wakelock at drain/eos state due to upper layer won't handle wakelock*/
+#if 0
 		} else
 			msm_compr_send_buffer(prtd);
+#else
+		} else {
+			msm_compr_send_buffer(prtd);
+			if (atomic_read(&prtd->drain) || atomic_read(&prtd->eos)) {
+				pr_debug("wake_unlock compr_lpa_q6_cb_wakelock due to at drain/eos state\n");
+				wake_unlock(&compr_lpa_q6_cb_wakelock);
+			}
+		}
+#endif
+/* HTC_AUD_END */
 
 		spin_unlock_irqrestore(&prtd->lock, flags);
 		break;
@@ -717,6 +798,10 @@ static void compr_event_handler(uint32_t opcode,
 		break;
 
 	case ASM_DATA_EVENT_RENDERED_EOS:
+/* HTC_AUD_START */
+		wake_lock_timeout(&compr_lpa_q6_cb_wakelock, 5 * HZ);
+		pr_debug("ASM_DATA_EVENT_RENDERED_EOS hold compr_lpa_q6_cb_wakelock 5s\n");
+/* HTC_AUD_END */
 		spin_lock_irqsave(&prtd->lock, flags);
 		pr_debug("%s: ASM_DATA_CMDRSP_EOS token 0x%x,stream id %d\n",
 			  __func__, token, stream_id);
@@ -726,7 +811,7 @@ static void compr_event_handler(uint32_t opcode,
 			prtd->eos_ack = 1;
 			wake_up(&prtd->eos_wait);
 		}
-		atomic_set(&prtd->eos, 0);
+		/* atomic_set(&prtd->eos, 0); HTC_AUDIO */
 		stream_index = STREAM_ARRAY_INDEX(stream_id);
 		if (stream_index >= MAX_NUMBER_OF_STREAMS ||
 		    stream_index < 0) {
@@ -1302,6 +1387,15 @@ static int msm_compr_configure_dsp_for_playback
 		(codec_options->flac_dec.sample_size != 0))
 		bits_per_sample = codec_options->flac_dec.sample_size;
 
+/* HTC_AUD_START */
+	if (htc_acoustic_query_feature(HTC_AUD_24BIT) && prtd->codec != FORMAT_FLAC) {
+		pr_info("%s: enable 24 bit Audio in POPP\n",
+			__func__);
+		bits_per_sample = 24;
+	}
+	prtd->bits_per_sample = bits_per_sample;
+/* HTC_AUD_END */
+
 	if (prtd->compr_passthr != LEGACY_PCM) {
 		ret = q6asm_open_write_compressed(ac, prtd->codec,
 						  prtd->compr_passthr);
@@ -1326,6 +1420,17 @@ static int msm_compr_configure_dsp_for_playback
 	} else {
 		pr_debug("%s: stream_id %d bits_per_sample %d\n",
 				__func__, ac->stream_id, bits_per_sample);
+
+/* HTC_AUD_START */
+		if(prtd->sample_rate > 48000) {
+			pr_info("%s: HD audio, set popp to HTC_POPP_HD_TOPOLOGY\n",__func__);
+			ac->topology = HTC_POPP_HD_TOPOLOGY;
+		} else {
+			pr_info("%s: non-HD audio, set popp to HTC_POPP_TOPOLOGY\n",__func__);
+			ac->topology = HTC_POPP_TOPOLOGY;
+		}
+/* HTC_AUD_END */
+
 		ret = q6asm_stream_open_write_v4(ac,
 				prtd->codec, bits_per_sample,
 				ac->stream_id,
@@ -1474,7 +1579,13 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 	}
 
 	stream_index = STREAM_ARRAY_INDEX(ac->stream_id);
+/* HTC_AUD_START Fix Klockwork */
+#if 0
 	if (stream_index >= MAX_NUMBER_OF_STREAMS || stream_index < 0) {
+#else
+	if (stream_index >= MAX_NUMBER_OF_STREAMS) {
+#endif
+/* HTC_AUD_END */
 		pr_err("%s: Invalid stream index:%d", __func__, stream_index);
 		return -EINVAL;
 	}
@@ -1629,6 +1740,7 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 	prtd->partial_drain_delay = 0;
 	prtd->next_stream = 0;
 	memset(&prtd->gapless_state, 0, sizeof(struct msm_compr_gapless_state));
+
 	/*
 	 * Update the use_dsp_gapless_mode from gapless struture with the value
 	 * part of platform data.
@@ -1646,6 +1758,7 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 	atomic_set(&prtd->close, 0);
 	atomic_set(&prtd->wait_on_close, 0);
 	atomic_set(&prtd->error, 0);
+	atomic_set(&prtd->drain_done_pendding, 0); /* HTC_AUDIO */
 
 	init_waitqueue_head(&prtd->eos_wait);
 	init_waitqueue_head(&prtd->drain_wait);
@@ -1664,6 +1777,15 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 	pr_debug("%s: session ID %d\n", __func__, prtd->audio_client->session);
 	prtd->audio_client->perf_mode = false;
 	prtd->session_id = prtd->audio_client->session;
+/* HTC_AUD_START */
+	if (q6asm_set_io_mode(prtd->audio_client, (COMPRESSED_STREAM_IO | ASYNC_IO_MODE))) {
+		pr_err("%s: Set IO mode failed\n", __func__);
+		return -EINVAL;
+	}
+
+	prtd->stream_end = false;
+	prtd->lasttimestamp = 0;
+/* HTC_AUD_END */
 	msm_adsp_init_mixer_ctl_pp_event_queue(rtd);
 	if (pdata->ion_fd[rtd->dai_link->be_id] > 0) {
 		ret = msm_compr_map_ion_fd(prtd,
@@ -1849,6 +1971,10 @@ static int msm_compr_playback_free(struct snd_compr_stream *cstream)
 		pdata->ion_fd[soc_prtd->dai_link->be_id] = 0;
 	}
 
+/* HTC_AUD_START */
+	ac->topology = 0;
+/* HTC_AUD_END */
+
 	q6asm_audio_client_free(ac);
 	msm_adsp_clean_mixer_ctl_pp_event_queue(soc_prtd);
 	if (pdata->audio_effects[soc_prtd->dai_link->be_id] != NULL) {
@@ -1904,7 +2030,13 @@ static int msm_compr_capture_free(struct snd_compr_stream *cstream)
 	stream_id = ac->stream_id;
 
 	stream_index = STREAM_ARRAY_INDEX(stream_id);
+/* HTC_AUD_START Fix Klockwork */
+#if 0
 	if ((stream_index < MAX_NUMBER_OF_STREAMS && stream_index >= 0)) {
+#else
+	if (stream_index < MAX_NUMBER_OF_STREAMS) {
+#endif
+/* HTC_AUD_END */
 		spin_unlock_irqrestore(&prtd->lock, flags);
 		pr_debug("close stream %d", stream_id);
 		q6asm_stream_cmd(ac, CMD_CLOSE, stream_id);
@@ -1973,11 +2105,20 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 	prtd->sample_rate = prtd->codec_param.codec.sample_rate;
 	pr_debug("%s: sample_rate %d\n", __func__, prtd->sample_rate);
 
+/* HTC_AUD_START Fix Klockwork */
+#if 0
 	if ((prtd->codec_param.codec.compr_passthr >= LEGACY_PCM &&
 	    prtd->codec_param.
 	    codec.compr_passthr <= COMPRESSED_PASSTHROUGH_DSD) ||
 	    (prtd->codec_param.
 	    codec.compr_passthr == COMPRESSED_PASSTHROUGH_IEC61937))
+#else
+	if ((prtd->codec_param.
+	    codec.compr_passthr <= COMPRESSED_PASSTHROUGH_DSD) ||
+	    (prtd->codec_param.
+	    codec.compr_passthr == COMPRESSED_PASSTHROUGH_IEC61937))
+#endif
+/* HTC_AUD_END */
 		prtd->compr_passthr = prtd->codec_param.codec.compr_passthr;
 	else
 		prtd->compr_passthr = LEGACY_PCM;
@@ -2140,11 +2281,18 @@ static int msm_compr_drain_buffer(struct msm_compr_audio *prtd,
 	prtd->drain_ready = 0;
 	spin_unlock_irqrestore(&prtd->lock, *flags);
 	pr_debug("%s: wait for buffer to be drained\n",  __func__);
+/* HTC_AUDIO_START */
+#if 0
 	rc = wait_event_interruptible(prtd->drain_wait,
 					prtd->drain_ready ||
 					prtd->cmd_interrupt ||
 					atomic_read(&prtd->xrun) ||
 					atomic_read(&prtd->error));
+#else
+	msm_compr_wait_event_freezable(prtd, 0);
+	atomic_set(&prtd->drain, 0);
+#endif
+/* HTC_AUD_END */
 	pr_debug("%s: out of buffer drain wait with ret %d\n", __func__, rc);
 	spin_lock_irqsave(&prtd->lock, *flags);
 	if (prtd->cmd_interrupt) {
@@ -2214,6 +2362,9 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	unsigned long flags;
 	int stream_id;
 	uint32_t stream_index;
+/* HTC_AUD_START */
+	int is_partial_drain = 0;
+/* HTC_AUD_END */
 	uint16_t bits_per_sample = 16;
 	union snd_codec_options *codec_options =
 		&(prtd->codec_param.codec.options);
@@ -2223,7 +2374,16 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		pr_err("%s Got RESET EVENTS notification, return immediately",
 			__func__);
 		spin_unlock_irqrestore(&prtd->lock, flags);
+/* HTC_AUD_START */
+#if 0
 		return 0;
+#else
+		if (cmd == SND_COMPR_TRIGGER_PARTIAL_DRAIN)
+			return -ENETRESET;
+		else
+			return 0;
+#endif
+/* HTC_AUD_END */
 	}
 	spin_unlock_irqrestore(&prtd->lock, flags);
 
@@ -2296,17 +2456,22 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 				prtd->cmd_interrupt = 1;
 				wake_up(&prtd->eos_wait);
 			}
-			atomic_set(&prtd->eos, 0);
+			/*atomic_set(&prtd->eos, 0); HTC_AUDIO */
 		}
 		if (atomic_read(&prtd->drain)) {
 			pr_debug("%s: interrupt drain wait queues", __func__);
 			prtd->cmd_interrupt = 1;
 			prtd->drain_ready = 1;
 			wake_up(&prtd->drain_wait);
-			atomic_set(&prtd->drain, 0);
+			/*atomic_set(&prtd->drain, 0); HTC_AUDIO */
 		}
 		prtd->last_buffer = 0;
 		prtd->cmd_ack = 0;
+/* HTC_AUD_START */
+		pr_debug("reset lasttimestamp at SNDRV_PCM_TRIGGER_STOP\n");
+		prtd->stream_end = false;
+		prtd->lasttimestamp = 0;
+/* HTC_AUD_END */
 		if (!prtd->gapless_state.gapless_transition) {
 			pr_debug("issue CMD_FLUSH stream_id %d\n", stream_id);
 			spin_unlock_irqrestore(&prtd->lock, flags);
@@ -2325,6 +2490,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		prtd->marker_timestamp = 0;
 
 		atomic_set(&prtd->xrun, 0);
+		atomic_set(&prtd->drain_done_pendding, 0); /* HTC_AUDIO */
 		spin_unlock_irqrestore(&prtd->lock, flags);
 		break;
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
@@ -2344,6 +2510,21 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			atomic_set(&prtd->start, 1);
 			q6asm_run_nowait(prtd->audio_client, prtd->run_mode,
 					 0, 0);
+/* HTC_AUD_START */
+			if (atomic_read(&prtd->drain_done_pendding)) {
+				spin_lock_irqsave(&prtd->lock, flags);
+				pr_debug("SNDRV_PCM_TRIGGER_PAUSE_RELEASE: has the drain_done_pendding signal\n");
+				if (prtd->last_buffer)
+					prtd->last_buffer = 0;
+				if (atomic_read(&prtd->drain)) {
+					pr_debug("SNDRV_PCM_TRIGGER_PAUSE_RELEASE: wake up on drain\n");
+					prtd->drain_ready = 1;
+					wake_up(&prtd->drain_wait);
+				}
+				atomic_set(&prtd->drain_done_pendding, 0);
+				spin_unlock_irqrestore(&prtd->lock, flags);
+			}
+/* HTC_AUD_END */
 		}
 		break;
 	case SND_COMPR_TRIGGER_PARTIAL_DRAIN:
@@ -2352,8 +2533,18 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			pr_debug("%s: set partial drain as drain\n", __func__);
 			cmd = SND_COMPR_TRIGGER_DRAIN;
 		}
+/* HTC_AUD_START */
+		is_partial_drain = 1;
+/* HTC_AUD_END */
 	case SND_COMPR_TRIGGER_DRAIN:
 		pr_debug("%s: SNDRV_COMPRESS_DRAIN\n", __func__);
+/* HTC_AUD_START */
+		if ((cmd == SND_COMPR_TRIGGER_DRAIN) &&
+			!is_partial_drain) {
+			pr_debug("%s: stream is end, skip drain", __func__);
+			break;
+		}
+/* HTC_AUD_END */
 		/* Make sure all the data is sent to DSP before sending EOS */
 		spin_lock_irqsave(&prtd->lock, flags);
 
@@ -2440,6 +2631,11 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 				msecs_to_jiffies(prtd->partial_drain_delay));
 			pr_debug("%s: out of additional wait for low sample rate\n",
 				 __func__);
+/* HTC_AUD_START */
+			/*  to avoid return dsp-timestamp 0 before audioplayer release */
+			q6asm_get_session_time(prtd->audio_client, &prtd->lasttimestamp);
+			pr_debug("gapless: record stream end timestamp:%llu\n", prtd->lasttimestamp);
+/* HTC_AUD_END */
 			spin_lock_irqsave(&prtd->lock, flags);
 			if (prtd->cmd_interrupt) {
 				pr_debug("%s: additional wait interrupted by flush)\n",
@@ -2498,10 +2694,17 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 
 
 		/* Wait indefinitely for  DRAIN. Flush can also signal this*/
+/* HTC_AUDIO_START */
+#if 0
 		rc = wait_event_interruptible(prtd->eos_wait,
 						(prtd->eos_ack ||
 						prtd->cmd_interrupt ||
 						atomic_read(&prtd->error)));
+#else
+		msm_compr_wait_event_freezable(prtd, 1);
+		atomic_set(&prtd->eos, 0);
+#endif
+/* HTC_AUD_END */
 
 		if (rc < 0)
 			pr_err("%s: EOS wait failed\n", __func__);
@@ -2525,6 +2728,11 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			 * so prepare the current stream in session
 			 * for gapless playback
 			 */
+/* HTC_AUD_START */
+			/* record stream's last-timestamp to avoid return dsp-timestamp 0 before audioplayer release */
+			q6asm_get_session_time(prtd->audio_client, &prtd->lasttimestamp);
+			pr_debug("record stream end timestamp:%llu\n", prtd->lasttimestamp);
+/* HTC_AUD_END */
 			spin_lock_irqsave(&prtd->lock, flags);
 			pr_debug("%s:issue CMD_PAUSE stream_id %d",
 					  __func__, ac->stream_id);
@@ -2642,7 +2850,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		pr_debug("%s: open_write stream_id %d bits_per_sample %d",
 				__func__, stream_id, bits_per_sample);
 		rc = q6asm_stream_open_write_v4(prtd->audio_client,
-				prtd->codec, bits_per_sample,
+				prtd->codec, prtd->bits_per_sample, /* HTC_AUD */
 				stream_id,
 				prtd->gapless_state.use_dsp_gapless_mode);
 		if (rc < 0) {
@@ -2681,6 +2889,10 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 	struct snd_compr_tstamp tstamp;
 	uint64_t timestamp = 0;
 	int rc = 0, first_buffer;
+/* HTC_AUD_START */
+	uint64_t lasttimestamp;
+	int32_t stream_end;
+/* HTC_AUD_END */
 	unsigned long flags;
 	uint32_t gapless_transition;
 
@@ -2696,6 +2908,11 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 	else if (cstream->direction == SND_COMPRESS_CAPTURE)
 		tstamp.copied_total = prtd->received_total;
 	first_buffer = prtd->first_buffer;
+/* HTC_AUD_START */
+	stream_end = prtd->stream_end;
+	lasttimestamp = prtd->lasttimestamp;
+/* HTC_AUD_END */
+
 	if (atomic_read(&prtd->error)) {
 		pr_err_ratelimited("%s Got RESET EVENTS notification, return error\n",
 				   __func__);
@@ -2722,7 +2939,15 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 		 *  starting from 0) before the driver knows about EOS of first
 		 *  stream.
 		*/
+/* HTC_AUD_START */
+#if 0
 		if (!first_buffer || gapless_transition) {
+#else
+		if (stream_end) {
+			timestamp = lasttimestamp;
+		} else if (!first_buffer || gapless_transition) {
+#endif
+/* HTC_AUD_END */
 
 			if (pdata->use_legacy_api)
 				rc = q6asm_get_session_time_legacy(
@@ -2742,7 +2967,15 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 	} else {
 		spin_unlock_irqrestore(&prtd->lock, flags);
 	}
+/* HTC_AUD_START */
+#if 0
 	timestamp = prtd->marker_timestamp;
+#else
+	if (!stream_end) {
+		timestamp = prtd->marker_timestamp;
+	}
+#endif
+/* HTC_AUD_END */
 
 	/* DSP returns timestamp in usec */
 	pr_debug("%s: timestamp = %lld usec\n", __func__, timestamp);
@@ -2850,6 +3083,12 @@ static int msm_compr_playback_copy(struct snd_compr_stream *cstream,
 			pr_debug("%s: in xrun, count = %zd\n", __func__, count);
 			bytes_available = prtd->bytes_received - prtd->copied_total;
 			if (bytes_available >= runtime->fragment_size) {
+/* HTC_AUT_START */
+				if (prtd->stream_end){
+					pr_debug("reset lasttimestamp at msm_compr_send_buffer\n");
+					prtd->stream_end = false;
+				}
+/* HTC_AUT_END */
 				pr_debug("%s: handle xrun, bytes_to_write = %llu\n",
 					 __func__,
 					 bytes_available);
@@ -3010,6 +3249,14 @@ static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
 		pr_err("%s: prtd or audio client is NULL\n", __func__);
 		return -EINVAL;
 	}
+
+/* HTC_AUD_START */
+	pr_debug("reset lasttimestamp at setmetadata\n");
+	if (prtd->stream_end) {
+		prtd->stream_end = false;
+		prtd->lasttimestamp = 0;
+	}
+/* HTC_AUD_END */
 
 	if (((metadata->key == SNDRV_COMPRESS_ENCODER_PADDING) ||
 	     (metadata->key == SNDRV_COMPRESS_ENCODER_DELAY)) &&
@@ -4896,6 +5143,9 @@ static struct platform_driver msm_compr_driver = {
 
 static int __init msm_soc_platform_init(void)
 {
+/* HTC_AUD_START */
+	wake_lock_init(&compr_lpa_q6_cb_wakelock, WAKE_LOCK_SUSPEND, "compr_lpa_q6_cb");
+/* HTC_AUD_END */
 	return platform_driver_register(&msm_compr_driver);
 }
 module_init(msm_soc_platform_init);

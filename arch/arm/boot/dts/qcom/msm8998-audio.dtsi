@@ -334,14 +334,18 @@
 	clock_audio: audio_ext_clk {
 		status = "ok";
 		compatible = "qcom,audio-ref-clk";
-		qcom,audio-ref-clk-gpio = <&pm8998_gpios 13 0>;
+/* HTC_AUD_START - not audio GPIO */
+/*		qcom,audio-ref-clk-gpio = <&pm8998_gpios 13 0>; */
+/* HTC_AUD_END */
 		clock-names = "osr_clk";
 		clocks = <&clock_gcc clk_div_clk1>;
 		qcom,node_has_rpm_clock;
 		#clock-cells = <1>;
-		pinctrl-names = "sleep", "active";
-		pinctrl-0 = <&spkr_i2s_clk_sleep>;
-		pinctrl-1 = <&spkr_i2s_clk_active>;
+/* HTC_AUD_START - it control GPIO 69 which is not audio GPIO */
+/*		pinctrl-names = "sleep", "active"; */
+/*		pinctrl-0 = <&spkr_i2s_clk_sleep>; */
+/*		pinctrl-1 = <&spkr_i2s_clk_active>; */
+/* HTC_AUD_END */
 	};
 
 	clock_audio_lnbb: audio_ext_clk_lnbb {

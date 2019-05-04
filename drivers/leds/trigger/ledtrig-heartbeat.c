@@ -91,7 +91,7 @@ static ssize_t led_invert_show(struct device *dev,
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
 	struct heartbeat_trig_data *heartbeat_data = led_cdev->trigger_data;
 
-	return sprintf(buf, "%u\n", heartbeat_data->invert);
+	return snprintf(buf, PAGE_SIZE, "%u\n", heartbeat_data->invert);
 }
 
 static ssize_t led_invert_store(struct device *dev,

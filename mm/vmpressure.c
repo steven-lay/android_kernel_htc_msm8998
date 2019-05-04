@@ -379,6 +379,9 @@ void vmpressure_global(gfp_t gfp, unsigned long scanned,
 void vmpressure(gfp_t gfp, struct mem_cgroup *memcg,
 		unsigned long scanned, unsigned long reclaimed)
 {
+	if (reclaimed > scanned)
+		scanned = reclaimed;
+
 	if (!memcg)
 		vmpressure_global(gfp, scanned, reclaimed);
 

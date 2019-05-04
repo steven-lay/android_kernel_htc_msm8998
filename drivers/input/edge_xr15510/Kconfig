@@ -1,0 +1,10 @@
+#
+# Exar edge sensor driver configuration
+#
+
+config EDGE_XR15510
+	tristate "exar edge sensor driver module"
+	depends on I2C=y
+	help
+	  Say Y here to enable.
+

@@ -39,6 +39,9 @@
 #include <linux/backing-dev.h>
 #include <linux/ecryptfs.h>
 #include <linux/crypto.h>
+#ifdef CONFIG_SD_ENCRYPTION_MANAGER
+#include "sdcard_encrypt_mgr.h"
+#endif
 
 #define ECRYPTFS_DEFAULT_IV_BYTES 16
 #define ECRYPTFS_DEFAULT_EXTENT_SIZE 4096
@@ -359,10 +362,21 @@ struct ecryptfs_mount_crypt_stat {
 							 + 1];
 };
 
+#ifdef FEATURE_SDCARD_ENCRYPTION
+struct ecryptfs_mount_sd_crypt_stat {
+#define ECRYPTFS_DECRYPTION_ONLY               0x00000001
+#define ECRYPTFS_MEDIA_EXCEPTION               0x00000002
+	u32 flags;
+};
+#endif
+
 /* superblock private data. */
 struct ecryptfs_sb_info {
 	struct super_block *wsi_sb;
 	struct ecryptfs_mount_crypt_stat mount_crypt_stat;
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	struct ecryptfs_mount_sd_crypt_stat mount_sd_crypt_stat;
+#endif
 	struct backing_dev_info bdi;
 };
 

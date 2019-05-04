@@ -15,6 +15,8 @@
 
 #define DM_MSG_PREFIX	"verity-fec"
 
+extern atomic_t em_remount;
+
 /*
  * If error correction has been configured, returns true.
  */
@@ -504,7 +506,7 @@ void verity_fec_finish_io(struct dm_verity_io *io)
 	struct dm_verity_fec *f = io->v->fec;
 	struct dm_verity_fec_io *fio = fec_io(io);
 
-	if (!verity_fec_is_enabled(io->v))
+	if (!verity_fec_is_enabled(io->v) || atomic_read(&em_remount))
 		return;
 
 	mempool_free(fio->rs, f->rs_pool);

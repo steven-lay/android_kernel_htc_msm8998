@@ -9513,8 +9513,20 @@ static int nl80211_send_wowlan_nd(struct sk_buff *msg,
 
 	if (req->n_match_sets) {
 		matches = nla_nest_start(msg, NL80211_ATTR_SCHED_SCAN_MATCH);
+		/* HTC_WIFI_START */
+		// ** Fix Klocwork
+		if (!matches)
+			return -ENOBUFS;
+		/* HTC_WIFI_END */
+
 		for (i = 0; i < req->n_match_sets; i++) {
 			match = nla_nest_start(msg, i);
+			/* HTC_WIFI_START */
+			// ** Fix Klocwork
+			if (!match)
+				return -ENOBUFS;
+			/* HTC_WIFI_END */
+
 			nla_put(msg, NL80211_SCHED_SCAN_MATCH_ATTR_SSID,
 				req->match_sets[i].ssid.ssid_len,
 				req->match_sets[i].ssid.ssid);

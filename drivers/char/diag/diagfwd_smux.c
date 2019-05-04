@@ -62,7 +62,7 @@ static void diag_smux_event(void *priv, int event_type, const void *metadata)
 		pr_info("diag: SMUX_DISCONNECTED received, ch: %d\n", ch->id);
 		break;
 	case SMUX_WRITE_DONE:
-		pr_debug("diag: SMUX Write done, ch: %d\n", ch->id);
+		DIAGFWD_DBUG("diag: SMUX Write done, ch: %d\n", ch->id);
 		diag_remote_dev_write_done(ch->dev_id, rx_buf, len, ch->id);
 		break;
 	case SMUX_WRITE_FAIL:
@@ -87,12 +87,12 @@ static int diag_smux_init_ch(struct diag_smux_info *ch)
 		return -EINVAL;
 
 	if (!ch->enabled) {
-		pr_debug("diag: SMUX channel is not enabled id: %d\n", ch->id);
+		DIAGFWD_DBUG("diag: SMUX channel is not enabled id: %d\n", ch->id);
 		return -ENODEV;
 	}
 
 	if (ch->inited) {
-		pr_debug("diag: SMUX channel %d is already initialize\n",
+		DIAGFWD_DBUG("diag: SMUX channel %d is already initialize\n",
 			 ch->id);
 		return 0;
 	}
@@ -118,7 +118,7 @@ static int smux_get_rx_buffer(void *priv, void **pkt_priv, void **buf,
 	ch = &diag_smux[id];
 
 	if (ch->in_busy) {
-		pr_debug("diag: read buffer for SMUX is BUSY\n");
+		DIAGFWD_DBUG("diag: read buffer for SMUX is BUSY\n");
 		return -EAGAIN;
 	}
 
@@ -138,7 +138,7 @@ static int smux_open(int id)
 
 	ch = &diag_smux[id];
 	if (ch->opened) {
-		pr_debug("diag: SMUX channel %d is already connected\n",
+		DIAGFWD_DBUG("diag: SMUX channel %d is already connected\n",
 			 ch->id);
 		return 0;
 	}
@@ -172,7 +172,7 @@ static int smux_close(int id)
 
 	ch = &diag_smux[id];
 	if (!ch->enabled) {
-		pr_debug("diag: SMUX channel is not enabled id: %d\n", ch->id);
+		DIAGFWD_DBUG("diag: SMUX channel is not enabled id: %d\n", ch->id);
 		return -ENODEV;
 	}
 
@@ -231,7 +231,7 @@ static int diagfwd_smux_probe(struct platform_device *pdev)
 	if (!pdev)
 		return -EINVAL;
 
-	pr_debug("diag: SMUX probe called, pdev->id: %d\n", pdev->id);
+	DIAGFWD_DBUG("diag: SMUX probe called, pdev->id: %d\n", pdev->id);
 	if (pdev->id < 0 || pdev->id >= NUM_SMUX_DEV) {
 		pr_err("diag: No support for SMUX device %d\n", pdev->id);
 		return -EINVAL;
@@ -246,7 +246,7 @@ static int diagfwd_smux_remove(struct platform_device *pdev)
 	if (!pdev)
 		return -EINVAL;
 
-	pr_debug("diag: SMUX probe called, pdev->id: %d\n", pdev->id);
+	DIAGFWD_DBUG("diag: SMUX probe called, pdev->id: %d\n", pdev->id);
 	if (pdev->id < 0 || pdev->id >= NUM_SMUX_DEV) {
 		pr_err("diag: No support for SMUX device %d\n", pdev->id);
 		return -EINVAL;

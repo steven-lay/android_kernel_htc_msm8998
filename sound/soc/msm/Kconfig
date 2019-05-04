@@ -235,4 +235,9 @@ config SND_SOC_660
 	 the machine driver and the corresponding
 	 DAI-links
 
+config HTC_AUD_OCM
+	bool "OCM flag for HTC Audio customize"
+	default n
+	help
+	 Say Y to enable HTC AUD OCM.
 endmenu

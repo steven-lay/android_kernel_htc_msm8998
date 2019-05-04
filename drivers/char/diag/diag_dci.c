@@ -212,7 +212,7 @@ static void dci_handshake_work_fn(struct work_struct *work)
 						handshake_work);
 
 	if (status->open) {
-		pr_debug("diag: In %s, remote dci channel is open, index: %d\n",
+		DIAG_DBUG("diag: In %s, remote dci channel is open, index: %d\n",
 			 __func__, status->id);
 		return;
 	}
@@ -768,7 +768,7 @@ static struct dci_pkt_req_entry_t *diag_register_dci_transaction(int uid,
 	entry->client_id = client_id;
 	entry->uid = uid;
 	entry->tag = driver->dci_tag;
-	pr_debug("diag: Registering DCI cmd req, client_id: %d, uid: %d, tag:%d\n",
+	DIAG_DBUG("diag: Registering DCI cmd req, client_id: %d, uid: %d, tag:%d\n",
 				entry->client_id, entry->uid, entry->tag);
 	list_add_tail(&entry->track, &driver->dci_req_list);
 
@@ -956,7 +956,7 @@ void extract_dci_ctrl_pkt(unsigned char *buf, int len, int token)
 		dci_process_ctrl_handshake_pkt(temp, len, token);
 		break;
 	default:
-		pr_debug("diag: In %s, unknown control pkt %d\n",
+		DIAG_DBUG("diag: In %s, unknown control pkt %d\n",
 			 __func__, ctrl_pkt_id);
 		break;
 	}
@@ -1401,7 +1401,7 @@ void extract_dci_log(unsigned char *buf, int len, int data_source, int token,
 		if (entry->client_info.token != token)
 			continue;
 		if (diag_dci_query_log_mask(entry, log_code)) {
-			pr_debug("\t log code %x needed by client %d",
+			DIAG_DBUG("\t log code %x needed by client %d",
 				 log_code, entry->client->tgid);
 			/* copy to client buffer */
 			copy_dci_log(buf, len, entry, data_source, ext_hdr);
@@ -1965,7 +1965,7 @@ static int diag_process_dci_pkt_rsp(unsigned char *buf, int len)
 
 	/* Check if the command is allowed on DCI */
 	if (diag_dci_filter_commands(header)) {
-		pr_debug("diag: command not supported %d %d %d",
+		DIAG_DBUG("diag: command not supported %d %d %d",
 			 header->cmd_code, header->subsys_id,
 			 header->subsys_cmd_code);
 		mutex_unlock(&driver->dci_mutex);
@@ -1974,7 +1974,7 @@ static int diag_process_dci_pkt_rsp(unsigned char *buf, int len)
 
 	common_cmd = diag_check_common_cmd(header);
 	if (common_cmd < 0) {
-		pr_debug("diag: error in checking common command, %d\n",
+		DIAG_DBUG("diag: error in checking common command, %d\n",
 			 common_cmd);
 		mutex_unlock(&driver->dci_mutex);
 		return DIAG_DCI_SEND_DATA_FAIL;
@@ -2111,7 +2111,7 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 			mutex_unlock(&driver->dci_mutex);
 			return -ENOMEM;
 		}
-		pr_debug("diag: head of dci log mask %pK\n", head_log_mask_ptr);
+		DIAG_DBUG("diag: head of dci log mask %pK\n", head_log_mask_ptr);
 		count = 0; /* iterator for extracting log codes */
 
 		while (count < num_codes) {
@@ -2141,11 +2141,11 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 			while (log_mask_ptr && (offset < DCI_LOG_MASK_SIZE)) {
 				if (*log_mask_ptr == equip_id) {
 					found = 1;
-					pr_debug("diag: find equip id = %x at %pK\n",
+					DIAG_DBUG("diag: find equip id = %x at %pK\n",
 						 equip_id, log_mask_ptr);
 					break;
 				} else {
-					pr_debug("diag: did not find equip id = %x at %d\n",
+					DIAG_DBUG("diag: did not find equip id = %x at %d\n",
 						 equip_id, *log_mask_ptr);
 					log_mask_ptr += 514;
 					offset += 514;
@@ -2225,7 +2225,7 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 			mutex_unlock(&driver->dci_mutex);
 			return -ENOMEM;
 		}
-		pr_debug("diag: head of dci event mask %pK\n", event_mask_ptr);
+		DIAG_DBUG("diag: head of dci event mask %pK\n", event_mask_ptr);
 		count = 0; /* iterator for extracting log codes */
 		while (count < num_codes) {
 			if (read_len >= USER_SPACE_DATA) {

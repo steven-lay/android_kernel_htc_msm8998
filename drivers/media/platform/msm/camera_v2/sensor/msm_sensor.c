@@ -17,12 +17,128 @@
 #include "msm_camera_i2c_mux.h"
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
+/*HTC_START*/
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+#include "lc898123F40_htc.h"
+#endif
+/*HTC_END*/
 
 #undef CDBG
+//HTC_START
+#if 1
+#define CDBG(fmt, args...) pr_info("[CAM]"fmt, ##args)
+#else
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
+#endif
+//HTC_END
 
 static struct msm_camera_i2c_fn_t msm_sensor_cci_func_tbl;
 static struct msm_camera_i2c_fn_t msm_sensor_secure_func_tbl;
+
+/*HTC_START*/
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+
+#define OIS_COMPONENT_I2C_ADDR_WRITE 0x7C
+
+int htc_ois_calibration(struct msm_sensor_ctrl_t *s_ctrl, int cam_id)
+{
+	int rc = -1;
+	uint16_t cci_client_sid_backup;
+    pr_info("[OIS_Cali]%s:E \n", __func__);
+
+	/* Bcakup the I2C slave address */
+	cci_client_sid_backup = s_ctrl->sensor_i2c_client->cci_client->sid;
+
+	/* Replace the I2C slave address with OIS component */
+	s_ctrl->sensor_i2c_client->cci_client->sid = OIS_COMPONENT_I2C_ADDR_WRITE >> 1;
+
+	/*GYRO calibration*/
+	rc = htc_ext_GyroReCalib(s_ctrl->sensor_i2c_client, cam_id);
+	if (rc != 0)
+		pr_err("[OIS_Cali]htc_GyroReCalib fail.\n");
+	else
+	{
+		rc = htc_ext_WrGyroOffsetData();
+		if (rc != 0)
+			pr_err("[OIS_Cali]htc_WrGyroOffsetData fail.\n");
+		else
+			pr_info("[OIS_Cali]Gyro calibration success.\n");
+	}
+
+	/* Restore the I2C slave address */
+	s_ctrl->sensor_i2c_client->cci_client->sid = cci_client_sid_backup;
+
+	return rc;
+}
+
+int htc_ois_FWupdate(struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int rc = -1;
+	uint16_t cci_client_sid_backup;
+	static int m_first = 0;
+
+	/* Bcakup the I2C slave address */
+	cci_client_sid_backup = s_ctrl->sensor_i2c_client->cci_client->sid;
+
+	/* Replace the I2C slave address with OIS component */
+	s_ctrl->sensor_i2c_client->cci_client->sid = OIS_COMPONENT_I2C_ADDR_WRITE >> 1;
+
+	if (m_first == 0 && s_ctrl->sensordata->sensor_info->position == 0)
+	{
+		rc = htc_checkFWUpdate(s_ctrl->sensor_i2c_client);
+		m_first = 1;
+	}
+
+	/* Restore the I2C slave address */
+	s_ctrl->sensor_i2c_client->cci_client->sid = cci_client_sid_backup;
+
+	return rc;
+}
+
+int sensor_RamWrite32A(struct msm_sensor_ctrl_t *s_ctrl, unsigned short RamAddr, unsigned int RamData)
+{
+	//Add 32 bit I2C writing function
+	int rc = 0;
+	uint8_t data[4] = {0,0,0,0};
+	uint16_t cci_client_sid_backup;
+	enum msm_camera_i2c_reg_addr_type addr_type_backup;
+
+	/* Backup the I2C info */
+	cci_client_sid_backup = s_ctrl->sensor_i2c_client->cci_client->sid;
+	addr_type_backup = s_ctrl->sensor_i2c_client->addr_type;
+
+	/* Replace the I2C slave address with OIS component */
+	s_ctrl->sensor_i2c_client->cci_client->sid = OIS_COMPONENT_I2C_ADDR_WRITE >> 1;
+	s_ctrl->sensor_i2c_client->addr_type = MSM_CAMERA_I2C_WORD_ADDR;
+
+	data[0] = (RamData >> 24) & 0xFF;
+	data[1] = (RamData >> 16) & 0xFF;
+	data[2] = (RamData >> 8)  & 0xFF;
+	data[3] = (RamData) & 0xFF;
+
+	rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->i2c_write_seq(
+		s_ctrl->sensor_i2c_client, RamAddr, &data[0], 4);
+
+	/* Restore the I2C slave info */
+	s_ctrl->sensor_i2c_client->cci_client->sid = cci_client_sid_backup;
+	s_ctrl->sensor_i2c_client->addr_type = addr_type_backup;
+
+	if (rc < 0)
+		pr_err("[sensor][OIS] %s : write failed\n", __func__);
+
+	return rc;
+}
+
+int htc_ois_freq(struct msm_sensor_ctrl_t *s_ctrl, uint32_t freq)
+{
+	int32_t rc = 0;
+	CDBG("[sensor][OIS] %s : 0x8574 => %x \n", __func__, freq);
+	rc = sensor_RamWrite32A(s_ctrl, 0x8574, freq);
+
+	return rc;
+}
+#endif
+/*HTC_END*/
 
 static void msm_sensor_adjust_mclk(struct msm_camera_power_ctrl_t *ctrl)
 {
@@ -213,6 +329,11 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 			break;
 		}
 	}
+/*HTC_START*/
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+	htc_ois_FWupdate(s_ctrl);
+#endif
+/*HTC_END*/
 
 	return rc;
 }
@@ -268,13 +389,68 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		return rc;
 	}
 
+//HTC_START
+#if 1
+	CDBG("%s: read id: 0x%x expected id 0x%x, name:%s\n",
+			__func__, chipid, slave_info->sensor_id, sensor_name);
+#else
 	pr_debug("%s: read id: 0x%x expected id 0x%x:\n",
 			__func__, chipid, slave_info->sensor_id);
+#endif
+//HTC_END
 	if (msm_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
-		pr_err("%s chip id %x does not match %x\n",
+		pr_err("[CAM]%s chip id %x does not match %x\n",
 				__func__, chipid, slave_info->sensor_id);
 		return -ENODEV;
 	}
+//HTC_START, check imx351 cut version, read address 0x18 value, cut 1.0 for value = 0~2, cut 1.1 for value >= 3
+	if(strncmp("imx351_htc", sensor_name, sizeof("imx351_htc")) == 0)
+	{
+		int rc1 = 0;
+		rc1 = sensor_i2c_client->i2c_func_tbl->i2c_read(
+		sensor_i2c_client, 0x0018,
+		&chipid, MSM_CAMERA_I2C_BYTE_DATA);
+		if (rc1 < 0){
+			pr_err("%s read addr 0x0018 fail\n", __func__);
+			return -ENODEV;
+		}
+		else
+		{
+			if(chipid>=0 && chipid<=2)
+			{
+			CDBG("%s cut 1.0 match ok:0x%x\n", __func__, chipid);
+			}
+			else
+			{
+			CDBG("%s cut 1.0 match fail:0x%x\n", __func__, chipid);
+			return -ENODEV;
+			}
+		}
+	}
+	else if(strncmp("imx351_cut11_htc", sensor_name, sizeof("imx351_cut11_htc")) == 0)
+	{
+		int rc1 = 0;
+		rc1 = sensor_i2c_client->i2c_func_tbl->i2c_read(
+		sensor_i2c_client, 0x0018,
+		&chipid, MSM_CAMERA_I2C_BYTE_DATA);
+		if (rc1 < 0){
+			CDBG("%s read addr 0x0018 fail\n", __func__);
+			return -ENODEV;
+		}
+		else
+		{
+			if(chipid>=3)
+			{
+			CDBG("%s cut 1.1 match ok:0x%x\n", __func__, chipid);
+			}
+			else
+			{
+			CDBG("%s cut 1.0 match fail:0x%x\n", __func__, chipid);
+			return -ENODEV;
+			}
+		}
+	}
+//HTC_END
 	return rc;
 }
 
@@ -377,6 +553,47 @@ long msm_sensor_subdev_fops_ioctl(struct file *file,
 {
 	return video_usercopy(file, cmd, arg, msm_sensor_subdev_do_ioctl);
 }
+
+//HTC_START
+static int msm_sensor_read_blc32(struct sensorb_cfg_data32 *cdata,
+    struct msm_sensor_ctrl_t *s_ctrl)
+{
+    int rc = 0;
+    static int first = true;
+    static uint8_t otp[4] = {0};
+    uint16_t read_data = 0;
+
+    if (first)
+    {
+        first = false;
+        // Read alpha value for BLC
+        msleep(10);
+        rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->i2c_read(s_ctrl->sensor_i2c_client, 0x798F, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+        otp[0] = read_data;
+        rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->i2c_read(s_ctrl->sensor_i2c_client, 0x7991, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+        otp[1] = read_data - 0xa;
+        rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->i2c_read(s_ctrl->sensor_i2c_client, 0x7993, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+        otp[2] = read_data - 0xe;
+        rc = s_ctrl->sensor_i2c_client->i2c_func_tbl->i2c_read(s_ctrl->sensor_i2c_client, 0x7995, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+        otp[3] = read_data;
+    }
+
+    if(cdata != NULL)
+    {
+        cdata->alpha.Alpha_Gb = otp[0];
+        cdata->alpha.Alpha_B = otp[1];
+        cdata->alpha.Alpha_R = otp[2];
+        cdata->alpha.Alpha_Gr = otp[3];
+
+        pr_info("%s: alpha value (Alpha_Gb) = 0x%x\n", __func__,  cdata->alpha.Alpha_Gb);
+        pr_info("%s: alpha value (Alpha_B) = 0x%x\n", __func__,  cdata->alpha.Alpha_B);
+        pr_info("%s: alpha value (Alpha_R) = 0x%x\n", __func__,  cdata->alpha.Alpha_R);
+        pr_info("%s: alpha value (Alpha_Gr) = 0x%x\n", __func__,  cdata->alpha.Alpha_Gr);
+    }
+
+    return rc;
+}
+//HTC_END
 
 static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 	void __user *argp)
@@ -899,6 +1116,27 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		}
 		break;
 	}
+/*HTC_START GYRO calibration*/
+    case CFG_SET_GYRO_CALIBRATION:
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+        rc = htc_ois_calibration(s_ctrl, s_ctrl->sensordata->sensor_info->position);
+#else
+        rc = 0;
+#endif
+    break;
+	case CFG_SET_SENSOR_OIS_FREQ:
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+		rc = htc_ois_freq(s_ctrl, (uint32_t)cdata->cfg.setting);
+#else
+		rc = 0;
+#endif
+		break;
+/*HTC_END*/
+// HTC_START
+    case CFG_READ_BLC:
+        rc = msm_sensor_read_blc32(cdata, s_ctrl);
+        break;
+// HTC_END
 
 	default:
 		rc = -EFAULT;
@@ -1386,6 +1624,22 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 		}
 		break;
 	}
+/*HTC_START GYRO calibration*/
+    case CFG_SET_GYRO_CALIBRATION:
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+        rc = htc_ois_calibration(s_ctrl, s_ctrl->sensordata->sensor_info->position);
+#else
+        rc = 0;
+#endif
+    break;
+	case CFG_SET_SENSOR_OIS_FREQ:
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+		rc = htc_ois_freq(s_ctrl, (uint32_t)(uint64_t)cdata->cfg.setting);
+#else
+		rc = 0;
+#endif
+		break;
+/*HTC_END*/
 
 	default:
 		rc = -EFAULT;
@@ -1445,6 +1699,9 @@ static struct msm_camera_i2c_fn_t msm_sensor_cci_func_tbl = {
 	.i2c_read = msm_camera_cci_i2c_read,
 	.i2c_read_seq = msm_camera_cci_i2c_read_seq,
 	.i2c_write = msm_camera_cci_i2c_write,
+/* HTC_START */
+	.i2c_write_seq = msm_camera_cci_i2c_write_seq,
+/* HTC_END */
 	.i2c_write_table = msm_camera_cci_i2c_write_table,
 	.i2c_write_seq_table = msm_camera_cci_i2c_write_seq_table,
 	.i2c_write_table_w_microdelay =

@@ -670,11 +670,20 @@ static void check_stack_usage(void)
 static inline void check_stack_usage(void) {}
 #endif
 
+#ifdef CONFIG_HTC_FD_MONITOR
+extern int clean_fd_list(const int cur_pid, const int callfrom);
+#endif
+
 void do_exit(long code)
 {
 	struct task_struct *tsk = current;
 	int group_dead;
 	TASKS_RCU(int tasks_rcu_i);
+
+#ifdef CONFIG_HTC_FD_MONITOR
+	if(!(tsk->flags & PF_KTHREAD) && tsk->tgid == tsk->pid)
+		clean_fd_list(tsk->tgid, 0);
+#endif
 
 	profile_task_exit(tsk);
 

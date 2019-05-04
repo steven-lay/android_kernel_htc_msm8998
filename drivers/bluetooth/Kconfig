@@ -18,6 +18,13 @@ config BT_QCA
 	tristate
 	select FW_LOADER
 
+config BT_HTCBDA
+	tristate "Load Bluetooth Device Address"
+	default n
+	help
+	  Extract Bluetooth bd_address information from ATAG set up
+	  by the bootloader.
+
 config BT_HCIBTUSB
 	tristate "HCI USB driver"
 	depends on USB

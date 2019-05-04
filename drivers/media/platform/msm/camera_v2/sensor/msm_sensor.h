@@ -92,6 +92,12 @@ struct msm_sensor_ctrl_t {
 	uint8_t bypass_video_node_creation;
 };
 
+/*HTC_START*/
+#ifdef CONFIG_OIS_LC898123F40_4AXIS
+int htc_ois_calibration(struct msm_sensor_ctrl_t *s_ctrl, int cam_id);
+#endif
+/*HTC_END*/
+
 int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp);
 
 int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl);

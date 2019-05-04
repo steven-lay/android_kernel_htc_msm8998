@@ -29,6 +29,9 @@
 #include <sound/minors.h>
 #include <sound/info.h>
 #include <sound/control.h>
+/* HTC_AUD_START */
+#include <sound/htc_acoustic_alsa.h>
+/* HTC_AUD_END */
 
 /* max number of user-defined controls */
 #define MAX_USER_CONTROLS	32

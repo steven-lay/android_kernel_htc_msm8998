@@ -26,6 +26,9 @@
 #include <sound/asound.h>
 #include "msm-dts-srs-tm-config.h"
 #include <sound/adsp_err.h>
+/* HTC_AUD_START */
+#include <sound/htc_acoustic_alsa.h>
+/* HTC_AUD_END */
 
 #define TIMEOUT_MS 1000
 
@@ -2603,8 +2606,115 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		}
 	}
 	atomic_inc(&this_adm.copp.cnt[port_idx][copp_idx]);
+
+/* HTC_AUD_START - HTC Effect {HPKB:2082}*/
+        htc_effect_by_adm_open(port_id, topology);
+/* HTC_AUD_END */
+
 	return copp_idx;
 }
+
+/* HTC_AUD_START - HTC Effect {HPKB:2082}*/
+int q6adm_htc_send_effects(int port_id, int copp_idx, void* payload, int payload_size) {
+	u8 *q6_cmd = NULL;
+	struct adm_cmd_set_pp_params_v5 *param;
+	int sz, rc = 0;
+	int port_idx;
+
+	port_id = afe_convert_virtual_to_portid(port_id);
+	port_idx = adm_validate_and_get_port_index(port_id);
+
+	if (port_idx < 0) {
+		pr_err("%s: Invalid port_id 0x%x\n", __func__, port_id);
+		return -EINVAL;
+	}
+
+	pr_info("%s: port id %i, copp idx %i\n",
+				__func__, port_idx, copp_idx);
+
+	sz = sizeof(struct adm_cmd_set_pp_params_v5) + payload_size;
+	q6_cmd = kzalloc(sz, GFP_KERNEL);
+
+	if (!q6_cmd) {
+		pr_err("%s, adm params memory alloc failed", __func__);
+		return -ENOMEM;
+	}
+
+	memcpy(((u8 *)q6_cmd + sizeof(struct adm_cmd_set_pp_params_v5)),
+			payload, payload_size);
+
+	param = (struct adm_cmd_set_pp_params_v5 *)q6_cmd;
+
+	param->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+	param->hdr.pkt_size = sz;
+	param->hdr.src_svc = APR_SVC_ADM;
+	param->hdr.src_domain = APR_DOMAIN_APPS;
+	param->hdr.src_port = port_id;
+	param->hdr.dest_svc = APR_SVC_ADM;
+	param->hdr.dest_domain = APR_DOMAIN_ADSP;
+	param->hdr.dest_port = atomic_read(&this_adm.copp.id[port_idx][copp_idx]);
+	param->hdr.token = port_idx << 16 | copp_idx;
+	param->hdr.opcode = ADM_CMD_SET_PP_PARAMS_V5;
+	param->payload_addr_lsw = 0;
+	param->payload_addr_msw = 0;
+	param->mem_map_handle = 0;
+	param->payload_size = payload_size;
+
+	atomic_set(&this_adm.copp.stat[port_idx][copp_idx], -1);
+	rc = apr_send_pkt(this_adm.apr, (uint32_t *)q6_cmd);
+	if (rc < 0) {
+		pr_err("%s: Set params failed port = %#x\n",
+			__func__, port_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	/* Wait for the callback */
+
+	rc = wait_event_timeout(this_adm.copp.wait[port_idx][copp_idx],
+			atomic_read(&this_adm.copp.stat[port_idx][copp_idx])>=0,
+			msecs_to_jiffies(TIMEOUT_MS));
+	if (!rc) {
+		pr_err("%s: Set params timed out port = %#x\n",
+			 __func__, port_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	rc = 0;
+fail_cmd:
+	kfree(q6_cmd);
+
+	return rc;
+}
+
+int htc_set_adm_effect(void* payload, int total_size, int topology, bool hd_support, int port_id)
+{
+	int copp_idx = 0;
+	int port_idx = 0;
+	port_id = afe_convert_virtual_to_portid(port_id);
+	port_idx = adm_validate_and_get_port_index(port_id);
+
+	if (port_idx < 0) {
+		pr_err("%s: Invalid port_id 0x%x\n", __func__, port_id);
+		return -EINVAL;
+	}
+
+	for (copp_idx = 0; copp_idx < MAX_COPPS_PER_PORT; copp_idx++)
+	{
+		if (topology == atomic_read(&this_adm.copp.topology[port_idx][copp_idx])) {
+			q6adm_htc_send_effects(port_id, copp_idx, payload, total_size);
+			return 0;
+		}
+		else if (ADM_COPP_ID_HTC_HD_AUDIO == atomic_read(&this_adm.copp.topology[port_idx][copp_idx])
+				&& hd_support) {
+			q6adm_htc_send_effects(port_id, copp_idx, payload, total_size);
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+/* HTC_AUD_END */
 
 void adm_copp_mfc_cfg(int port_id, int copp_idx, int dst_sample_rate)
 {

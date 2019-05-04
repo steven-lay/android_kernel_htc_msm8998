@@ -85,3 +85,10 @@ config NFC_NQ
 	  This enables the NFC driver for NQx based devices.
 	  This is for i2c connected version. NCI protocol logic
 	  resides in the usermode and it has no other NFC dependencies.
+
+config SENSORS_NFC_PN553
+	tristate "PN553 NFC sensor support"
+	depends on I2C
+	help
+	  PN553 NFC Driver implemented.
+

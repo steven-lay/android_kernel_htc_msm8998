@@ -571,6 +571,20 @@ config MEMORY_STATE_TIME
 	help
 	  Memory time statistics exported to /sys/kernel/memory_state_time
 
+config HTC_FLASHLIGHT
+    boolean "HTC Flashlight API"
+    default n
+    help
+      This option enables support for the htc_flahlight function.
+
+config VIB_TRIGGERS
+    boolean "Vibrator trigger interface support"
+    default n
+    help
+      This option enables trigger support for the vibrator function.
+      These triggers allow kernel events to drive the vibrator. If
+      unsure, say N.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
@@ -584,4 +598,6 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/fpr_FingerprintCard/Kconfig"
+source "drivers/misc/goodix_fp/Kconfig"
 endmenu
